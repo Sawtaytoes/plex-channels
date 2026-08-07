@@ -747,6 +747,9 @@ body.queue-view #tools { display: none; } /* the queue view has its own add box 
 /* Profile-gate hint under the "Plays under profile" select — its own block line, below the
    inline label+control, so it never wraps around the listbox. */
 #setmodal .subhint { display: block; color: var(--color-content-muted); font-size: 0.8rem; margin: 4px 0 14px; }
+/* Breathing room between an inline field label ("Type", "Plays under profile") and its
+   listbox trigger, which otherwise butts right against the text. */
+#setmodal .fieldselect { margin-left: 10px; }
 #startmodal .field, #setmodal .field, #dynmodal .field {
   display: block; margin-bottom: 14px; color: var(--color-content-muted); font-size: 0.92rem;
 }

@@ -193,6 +193,7 @@ export function SetModal() {
             control remounts in lockstep with it. Not keyed on `kind`, which the
             user's own pick writes. */}
         <SelectListbox
+          className="fieldselect"
           id="set-kind"
           key={setModal ? (setId ?? "new") : "closed"}
           label="Type"
@@ -212,6 +213,7 @@ export function SetModal() {
         {/* Keyed on modal-open identity, same reason as the Type select above: the control
             re-seeds from `value` only on remount, and this modal never unmounts. */}
         <SelectListbox
+          className="fieldselect"
           id="set-profile"
           key={setModal ? (setId ?? "new") : "closed"}
           label="Plays under profile"
