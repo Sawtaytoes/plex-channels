@@ -59,12 +59,21 @@ SHORTS = [  # (ratingKey, title, contentRating)
     ("1502", "Short Two", "TV-Y7"),
     ("1503", "Short Three (watched)", "TV-G"),
 ]
-# History rows: (account, section, ratingKey[, grandparentKey]) — one row per completed view.
+# Movies (section 1, type=1) — the rewatch pool. (ratingKey, title, contentRating)
+MOVIES = [
+    ("2001", "Movie A", "G"),    # younger-visible
+    ("2002", "Movie B", "PG"),   # older-visible
+    ("2003", "Movie C", "G"),    # younger-visible
+]
+# History rows: (account, section, ratingKey) — one row per completed view. Repeats = rewatches.
 HISTORY = [
     (YK_ACCT, 5, "12"),                 # YK watched Alpha S1E2
     (YK_ACCT, 5, "31"), (YK_ACCT, 5, "32"),  # YK watched all of Gamma
     (YK_ACCT, 15, "1503"),              # YK watched Short Three
     (OK_ACCT, 5, "21"),                 # OK watched Beta S1E1
+    # Movie rewatch history (section 1): YK saw Movie A twice + Movie C once; OK saw Movie B x3.
+    (YK_ACCT, 1, "2001"), (YK_ACCT, 1, "2001"), (YK_ACCT, 1, "2003"),
+    (OK_ACCT, 1, "2002"), (OK_ACCT, 1, "2002"), (OK_ACCT, 1, "2002"),
 ]
 
 RATINGS = {  # what each account's token can see (the account's own restricted view)
@@ -96,10 +105,14 @@ def gen():
                  "leafCount": len(leaves), "type": "show"}
                 for (rk, t, cr, leaves) in SHOWS if cr in RATINGS[uuid]]
         _write("get", "/library/sections/5/all?type=2&X-Plex-Container-Size=5000", uuid, _mc(Metadata=meta))
-        # Shorts listing (type=1)
+        # Shorts listing (type=1, section 15)
         shorts = [{"ratingKey": rk, "title": t, "contentRating": cr, "type": "movie"}
                   for (rk, t, cr) in SHORTS if cr in RATINGS[uuid]]
         _write("get", "/library/sections/15/all?type=1&X-Plex-Container-Size=10000", uuid, _mc(Metadata=shorts))
+        # Movies listing (type=1, section 1) — the rewatch pool source
+        movies = [{"ratingKey": rk, "title": t, "contentRating": cr, "type": "movie"}
+                  for (rk, t, cr) in MOVIES if cr in RATINGS[uuid]]
+        _write("get", "/library/sections/1/all?type=1&X-Plex-Container-Size=10000", uuid, _mc(Metadata=movies))
         # allLeaves per show the account can see
         for (rk, t, cr, leaves) in SHOWS:
             if cr not in RATINGS[uuid]:
@@ -109,9 +122,13 @@ def gen():
                     "type": typ, "extraType": extra, "viewCount": 0, "viewOffset": 0}
                    for (lrk, idx, season, lt, typ, extra) in leaves]
             _write("get", f"/library/metadata/{rk}/allLeaves", uuid, _mc(Metadata=eps))
+    # section_kind source: /library/sections Directory (admin token). section 1 = movie library.
+    _write("get", "/library/sections", None, _mc(Directory=[
+        {"key": "1", "type": "movie"}, {"key": "5", "type": "show"}, {"key": "15", "type": "movie"},
+    ]))
     # History per (account, section) — fetched with the ADMIN token (alias "admin").
     for acct in (YK_ACCT, OK_ACCT):
-        for sec in (5, 15):
+        for sec in (1, 5, 15):
             rows = [{"ratingKey": rk} for (a, s, rk) in HISTORY if a == acct and s == sec]
             q = urllib.parse.urlencode({
                 "accountID": acct, "X-Plex-Container-Start": 0,
@@ -140,11 +157,13 @@ sets:
     user_uuid: {YK_UUID}
     watch_count_accounts: [{YK_ACCT}]
     allowed_ratings: [TV-Y, TV-Y7, TV-G, G]
+    movie_ratings: [G]
   - plex_user: "Older"
     account_id: {OK_ACCT}
     user_uuid: {OK_UUID}
     watch_count_accounts: [{OK_ACCT}]
     allowed_ratings: [TV-PG, PG]
+    movie_ratings: [PG]
 """
     sets_path = os.path.join(os.path.dirname(OUT), "engine.sets.yaml")
     with open(sets_path, "w", encoding="utf-8") as f:

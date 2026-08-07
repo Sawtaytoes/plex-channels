@@ -32,9 +32,11 @@ const PY_ENV = {
   PLEX_API_SERVER_URL: 'https://plex.invalid', // guarantee no live call slips through
   PLEX_TOKEN: 'WRONG',
 };
-const pyBuckets = (profile) =>
-  JSON.parse(execFileSync('python3', ['-m', 'queue_builder.cli', 'buckets', 'kids', profile],
+const pyCli = (...args) =>
+  JSON.parse(execFileSync('python3', ['-m', 'queue_builder.cli', ...args],
     { cwd: REPO, env: PY_ENV, encoding: 'utf8' }).trim());
+const pyBuckets = (profile) => pyCli('buckets', 'kids', profile);
+const pyRewatch = (profile) => pyCli('rewatch-counts', 'kids', profile);
 
 const client = replayClient(CORPUS);
 const reg = routing.loadSets(SETS);
@@ -50,6 +52,15 @@ function nodeBuckets(profile) {
   });
 }
 
+// Node rewatch counts, normalized to the Python `_rewatch_counts` shape (sorted by ratingKey).
+function nodeRewatch(profile) {
+  const binding = routing.bindingFor(cfg, profile);
+  const { counts, titles } = select.rewatchCounts(
+    client, routing.rewatchSections(cfg), binding.movie_ratings,
+    binding.watch_count_accounts, client.accountToken(binding.user_uuid));
+  return [...counts.keys()].sort().map((rk) => ({ ratingKey: rk, count: counts.get(rk), title: titles.get(rk) ?? null }));
+}
+
 let failures = 0;
 console.log('=== engine parity: unwatched_buckets (Node select.js ↔ python cli buckets) ===');
 for (const profile of ['Younger', 'Older']) {
@@ -57,6 +68,18 @@ for (const profile of ['Younger', 'Older']) {
   const got = nodeBuckets(profile);
   if (JSON.stringify(want) === JSON.stringify(got)) {
     console.log(`  ✓ ${profile}: ${got.map((b) => `${b.show}[${b.episodes.join(',')}]`).join('  ')}`);
+  } else {
+    failures += 1;
+    console.log(`  ✗ ${profile}\n      python: ${JSON.stringify(want)}\n      node:   ${JSON.stringify(got)}`);
+  }
+}
+
+console.log('=== engine parity: rewatch_counts (Node select.js ↔ python cli rewatch-counts) ===');
+for (const profile of ['Younger', 'Older']) {
+  const want = pyRewatch(profile);
+  const got = nodeRewatch(profile);
+  if (JSON.stringify(want) === JSON.stringify(got)) {
+    console.log(`  ✓ ${profile}: ${got.map((c) => `${c.title}×${c.count}`).join('  ') || '(none)'}`);
   } else {
     failures += 1;
     console.log(`  ✗ ${profile}\n      python: ${JSON.stringify(want)}\n      node:   ${JSON.stringify(got)}`);
