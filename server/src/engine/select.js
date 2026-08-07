@@ -1,0 +1,176 @@
+// D3 of the Python → Node port: the DETERMINISTIC selection core, ported from
+// queue_builder/plex.py. This first slice is the unwatched-buckets pool that the kid rotation
+// is built from — the deterministic input the RNG shuffle later orders (see
+// docs/d3-engine-parity-corpus.md for why parity compares this, not the shuffled result).
+//
+// Ported here: _watched_for_set, episodic_shows, section_items, show_episodes, _rating_ok,
+// _int0, _at_or_after_start, _multi_season, unwatched_buckets. The client (live or corpus
+// replay) supplies `container(path, token)` + `accountToken(uuid)`; everything else is pure.
+//
+// NOT yet ported (follow-on, tracked in the handoff): collection-expansion blocklist
+// (find_collection/collection_children — only bare-ratingKey blocklist entries are honoured
+// here), the rewatch pool, curated next_queue, and build_reel.
+import { setSections } from './routing.js';
+import { WATCH_COUNT_ACCOUNTS } from '../env.js';
+
+// Plex omits viewCount at 0, so a missing/non-numeric value reads as 0 = unwatched (never as
+// watched — the resume-in-queue bug). Port of plex.py _int0.
+function int0(v) {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// allowed=null => no content-rating cap. Port of plex.py _rating_ok.
+function ratingOk(item, allowed) {
+  if (allowed == null) return true;
+  return allowed.has(String(item.contentRating));
+}
+
+// False if `ep` sorts BEFORE the manual start floor {season, episode}. Port of _at_or_after_start.
+function atOrAfterStart(ep, start) {
+  if (!start || start.episode == null) return true;
+  const i = (v, d = 0) => {
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : d;
+  };
+  const es = i(ep.season);
+  const ee = i(ep.episode);
+  const ss = i(start.season, 1);
+  const se = i(start.episode, 1);
+  return es > ss || (es === ss && ee >= se); // tuple >= (ss, se)
+}
+
+// True if a show spans more than one real season (S0 specials don't count). Port of _multi_season.
+function multiSeason(allEps) {
+  const seasons = new Set();
+  for (const e of allEps) {
+    const s = String(e.season);
+    if (s !== 'None' && s !== '0') seasons.add(s);
+  }
+  return seasons.size > 1;
+}
+
+// Shows (type=2) across `sections`, kept only if contentRating is allowed. Port of episodic_shows.
+function episodicShows(client, sections, allowed, blocked, token) {
+  const shows = [];
+  for (const sec of sections) {
+    const mc = client.container(`/library/sections/${sec}/all?type=2&X-Plex-Container-Size=5000`, token);
+    for (const s of mc.Metadata || []) {
+      const rk = String(s.ratingKey);
+      if (blocked.has(rk) || !ratingOk(s, allowed)) continue;
+      shows.push({ ratingKey: rk, title: s.title, section: sec });
+    }
+  }
+  return shows;
+}
+
+// Standalone items (type=1, e.g. Shorts) across `sections`, rating-filtered. Port of section_items.
+function sectionItems(client, sections, allowed, blocked, token) {
+  const items = [];
+  for (const sec of sections) {
+    const mc = client.container(`/library/sections/${sec}/all?type=1&X-Plex-Container-Size=10000`, token);
+    for (const m of mc.Metadata || []) {
+      const rk = String(m.ratingKey);
+      if (blocked.has(rk) || !ratingOk(m, allowed)) continue;
+      items.push({ ratingKey: rk, title: m.title, section: sec });
+    }
+  }
+  return items;
+}
+
+// Ordered flat episode list for a show (allLeaves), season/episode preserved. Port of show_episodes.
+function showEpisodes(client, showRatingKey, token) {
+  const mc = client.container(`/library/metadata/${showRatingKey}/allLeaves`, token);
+  return (mc.Metadata || []).map((e) => ({
+    ratingKey: String(e.ratingKey),
+    title: e.title,
+    show: e.grandparentTitle,
+    season: e.parentIndex,
+    episode: e.index,
+    duration: e.duration,
+    type: e.type,
+    extraType: e.extraType,
+    viewCount: int0(e.viewCount),
+    viewOffset: int0(e.viewOffset),
+  }));
+}
+
+// Every history row for one account (optionally one section). Port of _iter_history.
+function* iterHistory(client, accountId, sectionId, page = 500) {
+  let start = 0;
+  for (;;) {
+    const pairs = [
+      ['accountID', accountId],
+      ['X-Plex-Container-Start', start],
+      ['X-Plex-Container-Size', page],
+      ['sort', 'viewedAt:desc'],
+    ];
+    if (sectionId != null) pairs.push(['librarySectionID', sectionId]);
+    // urlencode mirrors Python's exactly (the sha1 corpus key is over this literal string).
+    const q = pairs.map(([k, v]) => `${encQ(k)}=${encQ(v)}`).join('&');
+    const mc = client.container('/status/sessions/history/all?' + q, null);
+    const rows = mc.Metadata || [];
+    for (const row of rows) yield row;
+    start += rows.length;
+    const total = mc.totalSize != null ? mc.totalSize : mc.size != null ? mc.size : 0;
+    if (!rows.length || start >= total) break;
+  }
+}
+// quote_plus: ':' -> '%3A', space -> '+'. Keys here have no chars that encode differently.
+function encQ(s) {
+  return encodeURIComponent(String(s)).replace(/%20/g, '+').replace(/[!'()*~]/g, (c) =>
+    '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+// Watched ratingKeys for a set, using the binding's own accounts. Port of _watched_for_set.
+export function watchedForSet(client, cfg, binding) {
+  const accts = (binding && binding.watch_count_accounts) || WATCH_COUNT_ACCOUNTS;
+  const watched = new Set();
+  for (const acct of accts) {
+    for (const sec of setSections(cfg)) {
+      for (const row of iterHistory(client, acct, sec)) {
+        if (row.ratingKey != null) watched.add(String(row.ratingKey));
+      }
+    }
+  }
+  return watched;
+}
+
+// The set's blocklist as concrete ratingKeys. NOTE: only bare ratingKeys are honoured here;
+// "Collection: <name>" expansion (find_collection/collection_children) is a follow-on port.
+function expandedBlocklist(cfg) {
+  const out = new Set();
+  for (const entry of cfg.blocklist || []) {
+    const s = String(entry).trim();
+    if (!/^collection:/i.test(s)) out.add(s);
+  }
+  return out;
+}
+
+// Per-bucket ordered lists of NOT-yet-watched items for a set. Port of unwatched_buckets.
+// Episodic show -> its ordered unwatched episodes; an item section (Shorts) -> ONE bucket
+// (returned in listing order — the caller shuffles; parity compares the set).
+export function unwatchedBuckets(client, cfg, binding) {
+  const allowed = binding.allowed_ratings;
+  const tok = client.accountToken(binding.user_uuid);
+  const watched = watchedForSet(client, cfg, binding);
+  const blocked = expandedBlocklist(cfg);
+  const starts = cfg.starts || {};
+
+  const buckets = [];
+  for (const show of episodicShows(client, cfg.episodic_sections, allowed, blocked, tok)) {
+    const allEps = showEpisodes(client, show.ratingKey, tok);
+    const start = starts[String(show.ratingKey)];
+    const eps = allEps.filter((e) => !watched.has(e.ratingKey) && atOrAfterStart(e, start));
+    if (eps.length) {
+      buckets.push({ show: show.title, ratingKey: show.ratingKey, episodes: eps, multi_season: multiSeason(allEps) });
+    }
+  }
+  for (const sec of cfg.item_sections || []) {
+    const items = sectionItems(client, [sec], allowed, blocked, tok)
+      .filter((it) => !watched.has(it.ratingKey))
+      .map((it) => ({ ratingKey: it.ratingKey, title: it.title, show: 'Shorts', season: null, episode: null }));
+    if (items.length) buckets.push({ show: 'Shorts', ratingKey: `section-${sec}`, episodes: items });
+  }
+  return buckets;
+}

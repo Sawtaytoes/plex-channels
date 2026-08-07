@@ -75,6 +75,11 @@ export function loadSets(path = SETS_PATH) {
         source: 'rotation',
         episodic_sections: sections,
         item_sections: (ent.item_sections || []).map(toInt),
+        // Carried for the D3 selection engine (unused by the D2 routing fns): per-show manual
+        // start floors { ratingKey: {season, episode} } and the blocklist (ratingKeys or
+        // "Collection: <name>" strings).
+        starts: ent.starts && typeof ent.starts === 'object' ? ent.starts : {},
+        blocklist: (ent.blocklist || []).map(String),
         profiles,
         has_explicit_profiles: hasExplicitProfiles,
         superseded_by: ent.superseded_by ? String(ent.superseded_by) : null,
