@@ -63,6 +63,22 @@ def _route(kind="cartoons", *title_parts):
           f"binding plex_user={b.get('plex_user')!r} account_id={b.get('account_id')}")
 
 
+def _buckets(set_name="kids", *profile_parts):
+    """Dump a set's unwatched_buckets as deterministic JSON — the parity oracle for the Node
+    engine's unwatchedBuckets (e2e/engine-parity.mjs). Episodic buckets keep allLeaves order;
+    the shorts bucket is emitted SORTED (it is rng-shuffled, so parity compares the set)."""
+    profile = " ".join(profile_parts) or None
+    buckets = plex.unwatched_buckets(set_name, binding=_binding(set_name, profile))
+    out = []
+    for bk in buckets:
+        eps = [e["ratingKey"] for e in bk["episodes"]]
+        if str(bk["ratingKey"]).startswith("section-"):
+            eps = sorted(eps)  # shorts are shuffled — compare as a set
+        out.append({"show": bk["show"], "ratingKey": bk["ratingKey"],
+                    "multi_season": bool(bk.get("multi_season", False)), "episodes": eps})
+    print(json.dumps(out, ensure_ascii=False))
+
+
 def _sections():
     """Dump set_sections + rewatch_sections per set as JSON — the parity oracle for the Node
     port's routing.setSections / routing.rewatchSections (e2e/binding-parity.mjs). Calls the
@@ -177,6 +193,8 @@ def main(argv=None):
         _route(*rest)
     elif cmd == "sections":
         _sections()
+    elif cmd == "buckets":
+        _buckets(*rest)
     elif cmd == "watched-count":
         _watched_count(*rest)
     elif cmd == "machine-id":

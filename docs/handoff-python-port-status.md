@@ -61,15 +61,34 @@ is untouched.
 
 **Next: D3.** D2's `forSet` seam is where the ported selection engine plugs in.
 
-### D3+ (shape unchanged; access caveat updated)
+### D3 — IN PROGRESS (corpus oracle + engine core landed; parity-gated)
 
-Build the `PLEX_RECORD_DIR` recording shim in `cli.py`/`plex.py`, record a corpus off live Plex
-(doable from the sandbox now), then port the selection engine (~1,200 lines) with a
-**to-be-written** `e2e/engine-parity.mjs`, then the one-week soak behind `ENGINE=node` on the
-preview endpoint before anything plays from it. D5 (`adb.js`) needs the real Shield; D6
-(`mqttd.js`) is portable but load-bearing; D7 (playback + `cast_sidecar/`) needs the TV + a
-family-hours soak; D8 (deletions + the lock→optimistic-concurrency swap) is last. See the table
-and the decision doc for the acceptance bar on each.
+Done and CI-gated:
+- **Corpus record/replay oracle** (`PLEX_RECORD_DIR`/`PLEX_REPLAY_DIR` in `plex.py`,
+  `e2e/record-corpus.sh`) — see `docs/d3-engine-parity-corpus.md`. Proven byte-identical offline.
+- **Engine core** — `server/src/engine/select.js` ports the DETERMINISTIC unwatched-buckets pool
+  (`_watched_for_set`, `episodic_shows`, `section_items`, `show_episodes`, `_rating_ok`, `_int0`,
+  `_at_or_after_start`, `_multi_season`, `unwatched_buckets`). `server/src/engine/plex-replay.js`
+  is the Node corpus client. **`e2e/engine-parity.mjs`** (required CI step "D3 engine parity")
+  diffs it against `python -m queue_builder.cli buckets` over a **synthetic** corpus regenerated
+  by `e2e/gen-synthetic-corpus.py` (owner decision 2026-08-07). Green: `Younger`/`Older` buckets
+  match exactly (watched-drop, rating cap, start floor, specials kept, per-account views).
+
+**Still to port (follow-on PRs), in order:**
+1. `find_collection`/`collection_children` → the **collection-expansion blocklist** (select.js
+   currently honours only bare-ratingKey blocklist entries) + `_expanded_blocklist`.
+2. The **rewatch pool** (`rewatch_counts`/`_movie_films`/`_show_films`/`section_kind`,
+   `rewatch_pool`, `pick_rewatch*`) — deterministic pool+counts diffed; the weighted pick stays a
+   seeded-RNG unit test per the doc's RNG caveat.
+3. **Curated `next_queue`** (`_describe`/`resolve_queue_entry`/`resolve_member`/`collection_items`
+   + `_keep_episode`/`_in_progress`/`_has_real_seasons`) and **`build_reel`** — all deterministic.
+4. `channel_buckets`/`member_buckets`/`build_rotation` wiring, then the **live client adapter** so
+   the `ENGINE=node` preview seam (`engineRouting.forSet`, D2) serves the Node-computed pool,
+   logging divergence for the one-week soak before cutover.
+
+D5 (`adb.js`) needs the real Shield; D6 (`mqttd.js`) is portable but load-bearing; D7 (playback +
+`cast_sidecar/`) needs the TV + a family-hours soak; D8 (deletions + the
+lock→optimistic-concurrency swap) is last. See the table and the decision doc for each bar.
 
 ### What actually runs live vs. what is inert (read this first if you're debugging behavior)
 

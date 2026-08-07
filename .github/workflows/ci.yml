@@ -111,6 +111,13 @@ jobs:
       - name: D2 routing parity (Node engine ↔ Python)
         run: node e2e/binding-parity.mjs
 
+      # D3 of the port: prove server/src/engine/select.js computes the unwatched-buckets pool
+      # byte-for-byte like queue_builder/plex.py, by diffing both over a SYNTHETIC corpus
+      # (regenerated hermetically by the harness; no real library data — owner decision
+      # 2026-08-07). Needs node (server) deps + ruamel (installed above); shells the Python CLI.
+      - name: D3 engine parity (Node engine ↔ Python)
+        run: node e2e/engine-parity.mjs
+
       # Browserless e2e — self-contained: each spawns its own server on a private
       # port with private /tmp files and asserts the degraded (no Plex / no MQTT)
       # paths, so they need neither a Plex token nor Playwright. Always run.
