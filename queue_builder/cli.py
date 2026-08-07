@@ -79,6 +79,20 @@ def _buckets(set_name="kids", *profile_parts):
     print(json.dumps(out, ensure_ascii=False))
 
 
+def _rewatch_counts(set_name="kids", *profile_parts):
+    """Dump the rewatch pool's per-item view counts as deterministic JSON (sorted by ratingKey)
+    — the parity oracle for the Node engine's rewatchCounts (e2e/engine-parity.mjs). The weighted
+    PICK is rng and stays a per-language seeded test; only these counts cross-check."""
+    profile = " ".join(profile_parts) or None
+    cfg = config.SETS[set_name]
+    b = _binding(set_name, profile)
+    counts, titles = plex.rewatch_counts(config.rewatch_sections(cfg), b["movie_ratings"],
+                                         b.get("watch_count_accounts"),
+                                         token=plex.account_token(b.get("user_uuid")))
+    out = [{"ratingKey": rk, "count": counts[rk], "title": titles.get(rk)} for rk in sorted(counts)]
+    print(json.dumps(out, ensure_ascii=False))
+
+
 def _sections():
     """Dump set_sections + rewatch_sections per set as JSON — the parity oracle for the Node
     port's routing.setSections / routing.rewatchSections (e2e/binding-parity.mjs). Calls the
@@ -195,6 +209,8 @@ def main(argv=None):
         _sections()
     elif cmd == "buckets":
         _buckets(*rest)
+    elif cmd == "rewatch-counts":
+        _rewatch_counts(*rest)
     elif cmd == "watched-count":
         _watched_count(*rest)
     elif cmd == "machine-id":

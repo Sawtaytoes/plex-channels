@@ -136,6 +136,59 @@ export function watchedForSet(client, cfg, binding) {
   return watched;
 }
 
+// Plex library type of a section ("movie"|"show"|…). Port of section_kind (no module cache —
+// one container read; behaviourally identical, avoids stale-cache footguns across clients).
+function sectionKind(client, section) {
+  const mc = client.container('/library/sections', null);
+  for (const d of mc.Directory || []) if (String(d.key) === String(section)) return d.type;
+  return undefined;
+}
+
+// {ratingKey: title} for a MOVIE library's rating-allowed films. Port of _movie_films.
+function movieFilms(client, section, allowed, token) {
+  const mc = client.container(`/library/sections/${section}/all?type=1&X-Plex-Container-Size=10000`, token);
+  const out = new Map();
+  for (const m of mc.Metadata || []) if (ratingOk(m, allowed)) out.set(String(m.ratingKey), m.title);
+  return out;
+}
+
+// {showRatingKey: title} for a SHOW library's ONE-EPISODE entries (anime films). Port of _show_films.
+function showFilms(client, section, allowed, token) {
+  const mc = client.container(`/library/sections/${section}/all?type=2&X-Plex-Container-Size=5000`, token);
+  const out = new Map();
+  for (const s of mc.Metadata || []) if (s.leafCount === 1 && ratingOk(s, allowed)) out.set(String(s.ratingKey), s.title);
+  return out;
+}
+
+// (counts, titles) for every rewatchable item these accounts have SEEN. Port of rewatch_counts:
+// the pool IS the history, so the "seen at least once" floor is structural. counts[rk] is the
+// view count (the weighting input); the weighted PICK is rng and stays a per-language test.
+export function rewatchCounts(client, sections, allowed, accts, token) {
+  const counts = new Map();
+  const titles = new Map();
+  for (const sec of sections) {
+    const isShow = sectionKind(client, sec) === 'show';
+    const films = isShow ? showFilms(client, sec, allowed, token) : movieFilms(client, sec, allowed, token);
+    if (!films.size) continue;
+    for (const acct of accts || WATCH_COUNT_ACCOUNTS) {
+      for (const row of iterHistory(client, acct, sec)) {
+        const rk = String(row.ratingKey);
+        if (isShow) {
+          const showRk = String(row.grandparentKey || '').split('/').pop();
+          if (!films.has(showRk)) continue;
+          titles.set(rk, films.get(showRk));
+        } else if (films.has(rk)) {
+          titles.set(rk, films.get(rk));
+        } else {
+          continue;
+        }
+        counts.set(rk, (counts.get(rk) || 0) + 1);
+      }
+    }
+  }
+  return { counts, titles };
+}
+
 // The set's blocklist as concrete ratingKeys. NOTE: only bare ratingKeys are honoured here;
 // "Collection: <name>" expansion (find_collection/collection_children) is a follow-on port.
 function expandedBlocklist(cfg) {
