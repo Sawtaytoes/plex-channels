@@ -112,6 +112,13 @@ def _adb_switch_async(target, cancel):
 
 def _do_start(client, payload, cancel):
     config.reload_sets()  # a queue created/edited in the web UI is playable immediately
+    # Playback (Companion :32500) and the profile picker both need the Shield's Plex app
+    # running. HA's `plex://` app link is supposed to foreground it, but when that silently
+    # fails Plex stays closed and the scan errors out with nothing playing. Open it
+    # ourselves over ADB first — never force-stops, so a movie already on screen is
+    # untouched. Best-effort: if ADB is off/unreachable we fall back to whatever HA did.
+    if config.ADB_ENABLED:
+        adb.ensure_plex_open()
     kind = payload.get("kind", "cartoons")
     set_name = payload.get("set", "auto")
     # A per-tier card (or the web Play landing) can name the Plex Home profile to play
