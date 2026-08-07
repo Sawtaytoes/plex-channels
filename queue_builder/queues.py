@@ -117,6 +117,33 @@ def parse_title_string(text):
     return s.strip(), year, guid
 
 
+# Duration strings for the completed-entry TTL (§B.3): `24h`, `7d`, `90m`, a bare number of
+# seconds; a trailing unit is optional. `0`/`never`/blank disables (returns None).
+_DURATION_RE = re.compile(r"^(\d+)\s*([smhdw]?)$")
+_DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800, "": 1}
+
+
+def parse_duration(value):
+    """Parse a duration string to whole seconds, or None when auto-removal is disabled.
+
+    Accepts `24h` / `7d` / `90m` / `45` (bare = seconds). `0`, `never`, `off`, `none`,
+    empty, or an unparseable value all return None (disabled) — the safe default, so a
+    typo never deletes anything. Mirrors parseDuration in server/src/queues.js.
+    """
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if s in ("", "0", "never", "off", "none", "disabled"):
+        return None
+    m = _DURATION_RE.match(s)
+    if not m:
+        return None
+    n = int(m.group(1))
+    if n == 0:
+        return None
+    return n * _DURATION_UNITS[m.group(2)]
+
+
 def _is_rating_key(value):
     """True if `value` is (or stringifies to) a bare numeric ratingKey."""
     if isinstance(value, bool):
@@ -280,6 +307,56 @@ def prune(set_name, keep_keys):
         return True
 
 
+def _ttl_for(cfg):
+    """Resolve a set's completed-entry TTL in seconds, or None when auto-removal is off.
+
+    The per-set `remove_completed_after` (from sets.yaml → config cfg) wins; absent → the
+    global config.REMOVE_COMPLETED_AFTER default. Either way it is parsed by parse_duration,
+    so `0`/`never`/blank disables. See the §B.3 config notes.
+    """
+    raw = (cfg or {}).get("remove_completed_after")
+    if raw is None:
+        raw = config.REMOVE_COMPLETED_AFTER
+    return parse_duration(raw)
+
+
+def sweep_completed(set_name, cfg, now=None):
+    """Auto-remove entries finished longer ago than the set's TTL (§B.3). Returns True if
+    anything was removed.
+
+    Complements mark_done: a finished entry is first KEPT + tagged `done: true`/`done_at`
+    (so the finished-series anchor stays visible), then removed automatically once it is
+    older than `remove_completed_after` (per-set) / config.REMOVE_COMPLETED_AFTER (global,
+    default 24h). A set with `keep_completed: true` or `reel: true` is EXEMPT — its finished
+    entries are never swept. Only entries carrying a numeric `done_at` are eligible, so a
+    hand-marked `done: true` with no timestamp (or a not-done entry) is left untouched.
+
+    Reuses `prune` for the actual atomic, comment-preserving removal: we compute the keys to
+    KEEP (everything except the past-TTL done entries) and hand them to prune. No-op (False)
+    when auto-removal is disabled/exempt or nothing is past its TTL.
+    """
+    if cfg.get("keep_completed") or cfg.get("reel"):
+        return False
+    ttl = _ttl_for(cfg)
+    if ttl is None:
+        return False
+    now = time.time() if now is None else now
+    keep, remove = [], []
+    for desc in entries(set_name):
+        raw = desc.get("raw")
+        done_at = raw.get("done_at") if isinstance(raw, dict) else None
+        past = False
+        if desc.get("done") and done_at is not None:
+            try:
+                past = (now - float(done_at)) >= ttl
+            except (TypeError, ValueError):
+                past = False           # unparseable done_at: never auto-remove
+        (remove if past else keep).append(desc["key"])
+    if not remove:
+        return False
+    return prune(set_name, keep)
+
+
 def mark_done(set_name, keep_keys):
     """Tag the given entries **done** in place — kept in the file, excluded from play.
 
@@ -290,11 +367,14 @@ def mark_done(set_name, keep_keys):
 
     Mirrors prune's round-trip discipline (re-read off disk, transform, atomic rewrite). A
     scalar entry is converted to a mapping so it can carry the flag — a ratingKey scalar ->
-    `{ratingKey: <n>, done: true}`, a title/`Collection:` scalar -> `{title: <text>, done:
-    true}`; a mapping simply gains `done: true`, preserving its other fields/comments. Match
-    is by `entry_key`, so the human's own text is never rewritten (only wrapped). No-op
-    (False) if ruamel is missing, the file/set is absent, or nothing changed — we never
-    clobber formatting with a lesser writer.
+    `{ratingKey: <n>, done: true, done_at: <epoch>}`, a title/`Collection:` scalar ->
+    `{title: <text>, done: true, done_at: <epoch>}`; a mapping simply gains `done: true` +
+    `done_at`, preserving its other fields/comments. `done_at` (epoch seconds, stamped
+    alongside `done`) is what queues.sweep_completed measures the TTL against — an entry
+    marked done here becomes eligible for auto-removal once it is older than the set's
+    remove_completed_after. Match is by `entry_key`, so the human's own text is never
+    rewritten (only wrapped). No-op (False) if ruamel is missing, the file/set is absent, or
+    nothing changed — we never clobber formatting with a lesser writer.
     """
     want = set(keep_keys)
     if not want:
@@ -310,6 +390,7 @@ def mark_done(set_name, keep_keys):
         seq = data.get(set_name)
         if seq is None:
             return False
+        now = int(time.time())
         changed = False
         for i in range(len(seq)):
             item = seq[i]
@@ -318,6 +399,7 @@ def mark_done(set_name, keep_keys):
             if isinstance(item, dict):
                 if not item.get("done"):
                     item["done"] = True
+                    item["done_at"] = now      # TTL clock starts now (§B.3)
                     changed = True
             else:
                 m = CommentedMap()
@@ -326,8 +408,61 @@ def mark_done(set_name, keep_keys):
                 else:
                     m["title"] = str(item).strip()
                 m["done"] = True
+                m["done_at"] = now             # TTL clock starts now (§B.3)
                 seq[i] = m
                 changed = True
+        if not changed:
+            return False
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            y.dump(data, f)
+        try:
+            os.replace(tmp, path)
+        except OSError:
+            with open(path, "w", encoding="utf-8") as f:
+                y.dump(data, f)
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+        return True
+
+
+def clear_done(set_name, keep_keys):
+    """Un-mark the given entries — strip `done` + `done_at`, keeping every other field/comment.
+
+    The inverse of mark_done, for STALE-DONE recovery: an entry mis-marked `done: true` whose
+    live Plex state is actually in-progress (a Season-0 OAD the specials filter used to drop,
+    or a partial view that briefly looked finished) must rejoin the lineup. Clearing the flag
+    here also lifts the TTL clock, so queues.sweep_completed can't auto-remove it while the
+    owner is mid-episode. A one-time write on the transition back to active — once genuinely
+    watched, next_queue re-marks it done normally.
+
+    Mirrors mark_done's round-trip discipline (re-read off disk, transform, atomic rewrite),
+    matched by `entry_key`. A scalar entry (never carrying `done`) is left untouched. No-op
+    (False) if ruamel is missing, the file/set is absent, or nothing changed.
+    """
+    want = set(keep_keys)
+    if not want:
+        return False
+    with _LOCK, _file_lock():
+        y = _ruamel()
+        path = config.QUEUES_PATH
+        if y is None or not os.path.exists(path):
+            return False
+        with open(path, "r", encoding="utf-8") as f:
+            data = y.load(f) or {}
+        seq = data.get(set_name)
+        if seq is None:
+            return False
+        changed = False
+        for item in seq:
+            if not isinstance(item, dict) or entry_key(item) not in want:
+                continue
+            for field in ("done", "done_at"):
+                if field in item:
+                    del item[field]
+                    changed = True
         if not changed:
             return False
         tmp = path + ".tmp"
