@@ -8,19 +8,16 @@
 
 ## Decision
 
-Every **non-modal** single-select picker in plex-channels is a Charcuterie **`Listbox`**
-(behind a `Button` trigger), not the native `Select`. The app-local
+**Every** single-select picker in plex-channels is a Charcuterie **`Listbox`** (behind a
+`Button` trigger), not the native `Select`. The app-local
 `web/src/components/SelectListbox.tsx` adapter carries the old `Select` prop shape
-(`id`/`label`/`value`/`onChange`/`options`) so the swap is mechanical.
+(`id`/`label`/`value`/`onChange`/`options`) so each swap is mechanical.
 
-Converted (non-modal): the Play-landing **tier picker** (`ChannelRow`), the **channel** and
+Converted — non-modal: the Play-landing **tier picker** (`ChannelRow`), the **channel** and
 **profile** pickers (`#chchannel` / `#chprofile`), the queue **Add-to position** pickers
-(queue view + toolbar), the per-item **episodes-per-play**, and the selection-bar **Move-to**.
-
-**Exception — pickers INSIDE a modal stay native `Select` for now:** SetModal (`set-kind`),
-DynModal (`dyn-behavior`, `b-profile`), StartModal (`start-series` / `start-season` /
-`start-episode`). See "The modal blocker" — this is a known gap with a named follow-up, not
-a place native `Select` is preferred.
+(queue view + toolbar), the per-item **episodes-per-play**, the selection-bar **Move-to**.
+Converted — in-modal (see next section): SetModal (`set-kind`), DynModal (`dyn-behavior`,
+`b-profile`), StartModal (`start-series` / `start-season` / `start-episode`).
 
 This reverses the app's earlier "native `Select`" default. That default only ever existed
 because `@charcuterie/ui` had **no** `Listbox`/`Combobox` — the owner accepted native as a
@@ -42,25 +39,30 @@ does not — themed consistency wins here, and `Listbox` keeps type-ahead + full
 forfeiting only form-submission / `:invalid` / autofill / the mobile wheel, none of which
 these controls use.
 
-## The modal blocker (why in-modal pickers are still native)
+## The modal blocker — RESOLVED by rebuilding `Modal` on Charcuterie
 
-plex-channels' `Modal` is a **native `<dialog>` + `showModal()`** (top layer). Charcuterie's
-`Listbox` portals its panel to `document.body`, which is **below** the dialog's top layer —
-so inside a modal the dropdown renders *behind* the modal and cannot be clicked (proven:
-Playwright's option click is intercepted by the in-dialog element every time). Charcuterie's
-own `Dialog` avoids this by portalling to `document.body` instead of the top layer (its M8
-decision), but plex-channels uses its own top-layer `Modal`.
+The reason in-modal pickers *couldn't* be `Listbox` at first: plex-channels' `Modal` was a
+**native `<dialog>` + `showModal()`** (browser top layer), and Charcuterie's `Listbox`
+portals its panel to `document.body` — **below** the top layer — so the dropdown rendered
+*behind* the modal and was unclickable (Playwright's option click was intercepted by the
+in-dialog element every time).
 
-So finishing the in-modal pickers needs one of:
+Fixed by rewriting `web/src/components/Modal.tsx` to wrap Charcuterie's **base `Modal`** (a
+`document.body`-portalled overlay at `--layer-modal`, with its own focus-trap / scrim /
+dismiss) instead of a native `<dialog>`. A picker's dropdown now portals to the same body
+layer and stacks *above* the modal (verified: `option-on-top`, and the whole in-modal flow
+green in `verify-profile-bindings`).
 
-1. **Refactor `Modal` off `showModal()`** to a body-portalled overlay (like Charcuterie
-   `Dialog`) — re-implements the free focus-trap / `::backdrop` / inert / `dialog[open]`
-   e2e contract the current Modal leans on.
-2. **Adopt Charcuterie's `Dialog`/`Modal`** wholesale.
+The app `Modal`'s **public API and DOM contract are unchanged** — the three consumers
+(DynModal/SetModal/StartModal) are untouched, and the app-styled `#id` box, the `<form
+onSubmit>`, `.modalbtns` footer and `.modalx` ✕ are all preserved. Two things had to move:
 
-Both are larger than this change and carry their own decision; until one lands, in-modal
-pickers stay native `Select` (fully functional — a native `<select>` popup is OS-rendered
-and sits above the top-layer dialog). **This is the one open TODO of this decision.**
+- **No native `<dialog>` → no `open` attribute / no `.close()`.** The box carries a
+  `data-open` attribute while visible; e2e selects `#{id}[data-open]` (was `#{id}[open]`),
+  waits for **detach** on close (was `:not([open])`), and closes via the ✕ (was
+  `dialog.close()`).
+- **`::backdrop` is gone** (Charcuterie renders its own `SharedBackdrop`); `busy.openModals`
+  + `html.modal-open` are still maintained in `Modal.tsx` so `uiBusy()` is unaffected.
 
 ## Consequences worth knowing
 
@@ -81,7 +83,7 @@ and sits above the top-layer dialog). **This is the one open TODO of this decisi
   the Select"* (the Play-landing dropdowns) and *"this is the wrong dropdown component… a
   native select from Charcuterie."*
 - CI browser suites green after the change: `channels-test`, `ui-test`, `kbd-undo`,
-  `homedrag`, `sse`; `verify-pr4-cutover` green end to end.
-- The modal occlusion is reproduced in `verify-profile-bindings` / the DynModal `b-profile`:
-  the portalled option click is intercepted by the top-layer dialog — the reason those
-  reverted to native.
+  `homedrag`, `sse`; `verify-pr4-cutover` (19) and `verify-profile-bindings` (16, incl. the
+  in-modal `dyn-behavior` + `b-profile` Listboxes) green end to end.
+- The modal fix is proven by the DynModal `b-profile` Listbox: its option click, once
+  intercepted by the top-layer dialog, now lands (`option-on-top`) and the flow passes.

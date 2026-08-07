@@ -9,10 +9,9 @@ import type { ReactNode } from "react"
  * renders a themed `Listbox`, never an OS `<select>`.
  *
  * Why: the owner only ever accepted the native `Select` as a stopgap for the absence of a
- * `Listbox`/`Combobox`; both now exist in `@charcuterie/ui@2.x`, so every NON-modal picker
- * uses one. (Pickers INSIDE a modal stay native `Select` for now — Charcuterie's
- * body-portalled `Listbox` renders behind the app's top-layer `<dialog>` Modal; that's the
- * open TODO in the decision below.)
+ * `Listbox`/`Combobox`; both now exist in `@charcuterie/ui@2.x`, so every picker uses one —
+ * including the ones inside modals, now that `Modal` is a Charcuterie body-portalled overlay
+ * (not a top-layer `<dialog>`) and the dropdown can stack above it.
  * (decision `2026-08-07-plex-channels-pickers-are-listbox-not-native-select`)
  *
  * DOM contract kept: the `id` and any `className` land on the TRIGGER button, so e2e that
