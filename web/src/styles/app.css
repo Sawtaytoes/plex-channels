@@ -299,11 +299,16 @@ ul.grid .empty { grid-column: 1 / -1; padding: 0; }
    means letting it own its own look. */
 .addpos :has(> select),
 .chhead label :has(> select),
-.playrow :has(> .rowtier),
 .tile .eps :has(> select),
 #selbar label :has(> select) {
   flex: 0 0 auto;
   width: auto;
+}
+/* The tier picker is no longer a native <select> in a full-width wrapper — it is a
+   `Listbox` whose trigger IS `.rowtier` (a Button). It sizes to its content already; it
+   only needs to keep its intrinsic width in the flex row rather than being stretched. */
+.playrow > .rowtier {
+  flex: 0 0 auto;
 }
 
 /* ---- QUEUE view: add bar + wrapped poster grid ---- */

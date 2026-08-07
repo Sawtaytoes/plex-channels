@@ -8,6 +8,7 @@
 // Needs: root agentic .env (Plex token), e2e/broker deps (aedes), mux-magic playwright,
 // PLAYWRIGHT_BROWSERS_PATH. Copies fixtures to /tmp — never touches real data.
 import { chromium } from './playwright.mjs';
+import { pickValueMaybe } from './pick.mjs';
 import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -131,7 +132,7 @@ try {
   // --- 4. Edit-load a LEGACY single-binding set → one prefilled card ---------- //
   await page.goto(`${BASE}/#/channels/shows`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#channels:not([hidden])', { timeout: 30000 });
-  await page.selectOption('#chprofile', 'younger').catch(() => {});
+  await pickValueMaybe(page, '[data-testid="chprofile"]', 'younger');
   await page.waitForTimeout(300);
   await page.click('#chconfigure');
   await page.waitForSelector('#dynmodal[open]');
