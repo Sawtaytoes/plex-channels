@@ -8,7 +8,9 @@ BOTH engines replay it: the Python engine via PLEX_REPLAY_DIR, the Node engine v
 server/src/engine/plex-replay.js. Covers the deterministic unwatched-buckets core: per-account
 library views, the content-rating cap, history→watched filtering, a manual start floor, a
 multi-season show, Season-0 specials/extras (which unwatched_buckets KEEPS — the curated path
-is what drops them), a fully-watched show (no bucket), and a shorts item section.
+is what drops them), a fully-watched show (no bucket), a shorts item section, and the
+collection-expansion blocklist (a bare-ratingKey block AND a "Collection: <name>" block that
+find_collection/collection_children expand to every member).
 
 Run: python3 e2e/gen-synthetic-corpus.py <out_dir>   (default e2e/fixtures/engine-corpus)
 It also writes <out_dir>/../engine.sets.yaml next to it. Idempotent.
@@ -53,6 +55,21 @@ SHOWS = [
         ("42", 2, 1, "Delta S1E2", "episode", None),
         ("43", 3, 1, "Delta S1E3", "episode", None),
     ]),
+    # Epsilon: younger-rated with an unwatched episode — would produce a bucket, BUT it's a
+    # member of the "Blocked Toons" collection, so the "Collection: …" blocklist entry drops it.
+    ("1005", "Epsilon", "TV-Y", [
+        ("51", 1, 1, "Epsilon S1E1", "episode", None),
+    ]),
+    # Zeta: younger-rated with an unwatched episode — dropped by a BARE-ratingKey blocklist entry.
+    ("1006", "Zeta", "TV-Y", [
+        ("61", 1, 1, "Zeta S1E1", "episode", None),
+    ]),
+]
+# Collections (type=18) per section, for the collection-expansion blocklist. Section 5 holds
+# "Blocked Toons" → Epsilon (show 1005); blocklisting "Collection: Blocked Toons" expands to
+# every child ratingKey, so episodic_shows drops the whole show. (crk, name, section, [(child_rk, type)])
+COLLECTIONS = [
+    ("9001", "Blocked Toons", 5, [("1005", "show")]),
 ]
 SHORTS = [  # (ratingKey, title, contentRating)
     ("1501", "Short One", "TV-G"),
@@ -122,6 +139,18 @@ def gen():
                     "type": typ, "extraType": extra, "viewCount": 0, "viewOffset": 0}
                    for (lrk, idx, season, lt, typ, extra) in leaves]
             _write("get", f"/library/metadata/{rk}/allLeaves", uuid, _mc(Metadata=eps))
+        # Collection-expansion blocklist source, per account: each section's collection listing
+        # (find_collection reads it) + each collection's children (collection_children reads it).
+        # Recorded under the account alias because _expanded_blocklist passes the account token.
+        by_section = {}
+        for (crk, cname, sec, children) in COLLECTIONS:
+            by_section.setdefault(sec, []).append(
+                {"ratingKey": crk, "title": cname, "type": "collection"})
+            child_meta = [{"ratingKey": ch_rk, "type": ch_type} for (ch_rk, ch_type) in children]
+            _write("get", f"/library/collections/{crk}/children", uuid, _mc(Metadata=child_meta))
+        for (sec, colls) in by_section.items():
+            _write("get", f"/library/sections/{sec}/collections?X-Plex-Container-Size=1000",
+                   uuid, _mc(Metadata=colls))
     # section_kind source: /library/sections Directory (admin token). section 1 = movie library.
     _write("get", "/library/sections", None, _mc(Directory=[
         {"key": "1", "type": "movie"}, {"key": "5", "type": "show"}, {"key": "15", "type": "movie"},
@@ -149,6 +178,9 @@ sets:
   behavior: progress
   sections: [5]
   item_sections: [15]
+  blocklist:
+  - "1006"                         # bare ratingKey → Zeta dropped directly
+  - "Collection: Blocked Toons"    # collection → expanded to Epsilon via find_collection/children
   starts:
     "1004": {{ season: 1, episode: 2 }}   # Delta begins at S1E2 (skip S1E1, don't mark it watched)
   profiles:

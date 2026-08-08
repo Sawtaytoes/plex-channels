@@ -4,12 +4,11 @@
 // docs/d3-engine-parity-corpus.md for why parity compares this, not the shuffled result).
 //
 // Ported here: _watched_for_set, episodic_shows, section_items, show_episodes, _rating_ok,
-// _int0, _at_or_after_start, _multi_season, unwatched_buckets. The client (live or corpus
-// replay) supplies `container(path, token)` + `accountToken(uuid)`; everything else is pure.
+// _int0, _at_or_after_start, _multi_season, unwatched_buckets, plus the collection-expansion
+// blocklist (find_collection / collection_children / _expanded_blocklist). The client (live or
+// corpus replay) supplies `container(path, token)` + `accountToken(uuid)`; everything else is pure.
 //
-// NOT yet ported (follow-on, tracked in the handoff): collection-expansion blocklist
-// (find_collection/collection_children — only bare-ratingKey blocklist entries are honoured
-// here), the rewatch pool, curated next_queue, and build_reel.
+// NOT yet ported (follow-on, tracked in the handoff): the curated next_queue and build_reel.
 import { setSections } from './routing.js';
 import { WATCH_COUNT_ACCOUNTS } from '../env.js';
 
@@ -189,13 +188,58 @@ export function rewatchCounts(client, sections, allowed, accts, token) {
   return { counts, titles };
 }
 
-// The set's blocklist as concrete ratingKeys. NOTE: only bare ratingKeys are honoured here;
-// "Collection: <name>" expansion (find_collection/collection_children) is a follow-on port.
-function expandedBlocklist(cfg) {
+// ratingKey of the Collection titled `name` in `section` (type=18), or null. Case-insensitive
+// exact title match. Port of find_collection. (No per-scan cache — one container read per lookup;
+// behaviourally identical, and the port has no module-level state to go stale across clients.)
+function findCollection(client, section, name, token) {
+  let mc;
+  try {
+    mc = client.container(`/library/sections/${section}/collections?X-Plex-Container-Size=1000`, token);
+  } catch {
+    return null; // network/query hiccup (or corpus miss): unresolved this scan, never crash
+  }
+  const want = name.trim().toLowerCase();
+  for (const c of mc.Metadata || []) {
+    if (String(c.title || '').trim().toLowerCase() === want) return String(c.ratingKey);
+  }
+  return null;
+}
+
+// Ordered child items of a collection (the collection's own `collectionSort` order — no
+// client-side re-sort). Port of collection_children.
+function collectionChildren(client, ratingKey, token) {
+  try {
+    const mc = client.container(`/library/collections/${ratingKey}/children`, token);
+    return mc.Metadata || [];
+  } catch {
+    return [];
+  }
+}
+
+// The set's blocklist as concrete ratingKeys to drop from the pool. Each entry is either a bare
+// ratingKey or a "Collection: <name>" string — the latter is expanded to every member's ratingKey
+// (searched across the set's sections; a shows collection contributes show ratingKeys that
+// episodic_shows drops, a shorts collection contributes item ratingKeys that section_items drops).
+// Unresolvable collection names are skipped. Port of _expanded_blocklist.
+function expandedBlocklist(client, cfg, token) {
   const out = new Set();
+  let sections = null;
   for (const entry of cfg.blocklist || []) {
     const s = String(entry).trim();
-    if (!/^collection:/i.test(s)) out.add(s);
+    if (!/^collection:/i.test(s)) {
+      out.add(s);
+      continue;
+    }
+    const name = s.split(':').slice(1).join(':').trim();
+    if (!name) continue;
+    if (sections === null) sections = setSections(cfg) || [];
+    for (const sec of sections) {
+      const crk = findCollection(client, sec, name, token);
+      if (crk) {
+        for (const ch of collectionChildren(client, crk, token)) out.add(String(ch.ratingKey));
+        break;
+      }
+    }
   }
   return out;
 }
@@ -207,7 +251,7 @@ export function unwatchedBuckets(client, cfg, binding) {
   const allowed = binding.allowed_ratings;
   const tok = client.accountToken(binding.user_uuid);
   const watched = watchedForSet(client, cfg, binding);
-  const blocked = expandedBlocklist(cfg);
+  const blocked = expandedBlocklist(client, cfg, tok);
   const starts = cfg.starts || {};
 
   const buckets = [];
