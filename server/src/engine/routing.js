@@ -80,6 +80,11 @@ export function loadSets(path = SETS_PATH) {
         // "Collection: <name>" strings).
         starts: ent.starts && typeof ent.starts === 'object' ? ent.starts : {},
         blocklist: (ent.blocklist || []).map(String),
+        // Explicit curated members (v3 PR 3): raw queues.yaml-style entries (a bare ratingKey, a
+        // "Collection: <name>" string, or a {ratingKey,title,episodes} mapping — describe() parses
+        // them). Non-empty => the channel's pool is these members PLUS the dynamic rule (additive);
+        // [] / absent => the pure rule pool. Consumed by engine/rotation.js channelBuckets.
+        members: Array.isArray(ent.members) ? ent.members : [],
         profiles,
         has_explicit_profiles: hasExplicitProfiles,
         superseded_by: ent.superseded_by ? String(ent.superseded_by) : null,
