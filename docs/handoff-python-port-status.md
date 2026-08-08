@@ -109,12 +109,31 @@ Done and CI-gated:
   an UNRESOLVED title, an already-`done` entry, and a fully-watched movie (newly finished). Green:
   `bobq` play=[2001] done=[2002, Movie C] unresolved=[No Such Title] remaining=4; `demo`
   play=[2001,41,2002,2003]. A negated watched-drop confirms the gate fails without the port.
+- **Rotation wiring (follow-on #3, LANDED 2026-08-07)** — new module
+  **`server/src/engine/rotation.js`** ports `_watched_all`, `member_descs`, `member_buckets`,
+  `channel_buckets`, and `build_rotation`. It combines the dynamic rule pool (`unwatchedBuckets`)
+  with a channel's explicit `members:` (resolved through `resolve.js` `resolveMember`, reusing
+  follow-on #2) into ONE deduped pool (members win), then interleaves it round-robin. `members` is
+  now carried onto the Node rotation cfg (`routing.js`) and `iterHistory` is exported from
+  `select.js` for `_watched_all`'s no-section scan. The `build_rotation` shuffle+round-robin is rng
+  (injected, like next_queue's anime branch), so parity compares the pre-shuffle pool
+  (`channelBuckets`), not the interleave.
+- **Gate (follow-on #3):** the "D3 engine parity" step now also diffs `channelBuckets` against
+  `python -m queue_builder.cli channel-buckets-json kidsplus Younger`. The synthetic corpus adds a
+  `kidsplus` channel (rule sections [5] + `members: [1001, 2002]`) exercising member/rule **dedup**
+  (member Alpha wins over the rule's Alpha, with a *different* episode list — [11,13] vs the rule's
+  [11,13,14,15] — proving the member path applied `keep_episode`+`_watched_all`), a movie member
+  **outside** the pool (Movie B, resolved by ratingKey), and the additive combine. Green: `kidsplus
+  × Younger` = Alpha[11,13] MovieB[2002] Delta[41,42,43] Epsilon[51] Zeta[61]. A negated dedup
+  confirms the gate fails without the port.
 
 **Still to port (follow-on PRs), in order:**
-1. `channel_buckets`/`member_buckets`/`build_rotation` + `_watched_all`/`member_descs` wiring
-   (reuses `resolve.js`'s `resolveMember`), then the **live client adapter** so the `ENGINE=node`
-   preview seam (`engineRouting.forSet`, D2) serves the Node-computed pool, logging divergence for
-   the one-week soak before cutover.
+1. The **live client adapter** — an undici-backed `client` (the `container`/`accountToken` surface
+   the engine modules already take, but hitting live Plex instead of the corpus) so the
+   `ENGINE=node` preview seam (`engineRouting.forSet`, D2) serves the Node-computed pool
+   (`channelBuckets`/`nextQueue`/`buildReel`), logging divergence against the Python result for the
+   one-week soak before cutover. This is the integration step the deterministic ports #1–#3 were
+   building toward; it needs live Plex (available here) + the soak window (calendar).
 
 D5 (`adb.js`) needs the real Shield; D6 (`mqttd.js`) is portable but load-bearing; D7 (playback +
 `cast_sidecar/`) needs the TV + a family-hours soak; D8 (deletions + the

@@ -95,7 +95,7 @@ export function showEpisodes(client, showRatingKey, token) {
 }
 
 // Every history row for one account (optionally one section). Port of _iter_history.
-function* iterHistory(client, accountId, sectionId, page = 500) {
+export function* iterHistory(client, accountId, sectionId, page = 500) {
   let start = 0;
   for (;;) {
     const pairs = [

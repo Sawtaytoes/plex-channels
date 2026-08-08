@@ -12,6 +12,7 @@
   python -m queue_builder.cli reel demo                # reel (DEMO) ordered lineup, read-only
   python -m queue_builder.cli resolve bob "Duel (1971)"   # dry-run: resolve one title string
   python -m queue_builder.cli machine-id               # server machineIdentifier
+  python -m queue_builder.cli channel-buckets-json kidsplus  # rule pool + members, deduped (parity oracle)
   python -m queue_builder.cli next-queue-json bobq      # next_queue deterministic result (parity oracle)
   python -m queue_builder.cli reel-json demo            # build_reel ordered lineup (parity oracle)
 """
@@ -79,6 +80,24 @@ def _buckets(set_name="kids", *profile_parts):
         if str(bk["ratingKey"]).startswith("section-"):
             eps = sorted(eps)  # shorts are shuffled — compare as a set
         out.append({"show": bk["show"], "ratingKey": bk["ratingKey"],
+                    "multi_season": bool(bk.get("multi_season", False)), "episodes": eps})
+    print(json.dumps(out, ensure_ascii=False))
+
+
+def _channel_buckets_json(set_name="kidsplus", *profile_parts):
+    """Dump a channel's channel_buckets (rule pool + curated members, deduped) as deterministic
+    JSON — the parity oracle for the Node engine's channelBuckets (e2e/engine-parity.mjs). Same
+    normalization as _buckets (episodic in allLeaves order; a shorts bucket sorted, as it is
+    rng-shuffled). The member/rule interleave (build_rotation) is rng and stays a per-language test;
+    only this pre-shuffle pool cross-checks."""
+    profile = " ".join(profile_parts) or None
+    buckets = plex.channel_buckets(set_name, binding=_binding(set_name, profile))
+    out = []
+    for bk in buckets:
+        eps = [str(e["ratingKey"]) for e in bk["episodes"]]
+        if str(bk["ratingKey"]).startswith("section-"):
+            eps = sorted(eps)  # shorts are shuffled — compare as a set
+        out.append({"show": bk["show"], "ratingKey": str(bk["ratingKey"]),
                     "multi_season": bool(bk.get("multi_season", False)), "episodes": eps})
     print(json.dumps(out, ensure_ascii=False))
 
@@ -250,6 +269,8 @@ def main(argv=None):
         _buckets(*rest)
     elif cmd == "rewatch-counts":
         _rewatch_counts(*rest)
+    elif cmd == "channel-buckets-json":
+        _channel_buckets_json(*rest)
     elif cmd == "next-queue-json":
         _next_queue_json(*rest)
     elif cmd == "reel-json":

@@ -23,6 +23,7 @@ execFileSync('python3', ['e2e/gen-synthetic-corpus.py', CORPUS], { cwd: REPO, st
 process.env.SETS_PATH = SETS;
 const routing = await import('../server/src/engine/routing.js');
 const select = await import('../server/src/engine/select.js');
+const rotation = await import('../server/src/engine/rotation.js');
 const { replayClient } = await import('../server/src/engine/plex-replay.js');
 
 const PY_ENV = {
@@ -37,10 +38,25 @@ const pyCli = (...args) =>
     { cwd: REPO, env: PY_ENV, encoding: 'utf8' }).trim());
 const pyBuckets = (profile) => pyCli('buckets', 'kids', profile);
 const pyRewatch = (profile) => pyCli('rewatch-counts', 'kids', profile);
+const pyChannelBuckets = (set, profile) => pyCli('channel-buckets-json', set, profile);
 
 const client = replayClient(CORPUS);
 const reg = routing.loadSets(SETS);
 const cfg = reg.sets.kids;
+
+// Node channel_buckets (rule pool + curated members, deduped), normalized to the _buckets shape.
+function nodeChannelBuckets(set, profile) {
+  const c = reg.sets[set];
+  const binding = routing.bindingFor(c, profile);
+  return rotation.channelBuckets(client, c, binding).map((bk) => {
+    let eps = bk.episodes.map((e) => String(e.ratingKey));
+    if (String(bk.ratingKey).startsWith('section-')) eps = [...eps].sort();
+    return {
+      show: bk.show, ratingKey: String(bk.ratingKey),
+      multi_season: Boolean(bk.multi_season), episodes: eps,
+    };
+  });
+}
 
 // Node buckets, normalized to the Python `_buckets` shape (episodes as ratingKeys; shorts sorted).
 function nodeBuckets(profile) {
@@ -83,6 +99,17 @@ for (const profile of ['Younger', 'Older']) {
   } else {
     failures += 1;
     console.log(`  ✗ ${profile}\n      python: ${JSON.stringify(want)}\n      node:   ${JSON.stringify(got)}`);
+  }
+}
+console.log('=== engine parity: channel_buckets (Node rotation.js ↔ python cli channel-buckets-json) ===');
+{
+  const want = pyChannelBuckets('kidsplus', 'Younger');
+  const got = nodeChannelBuckets('kidsplus', 'Younger');
+  if (JSON.stringify(want) === JSON.stringify(got)) {
+    console.log(`  ✓ kidsplus × Younger: ${got.map((b) => `${b.show}[${b.episodes.join(',')}]`).join('  ')}`);
+  } else {
+    failures += 1;
+    console.log(`  ✗ kidsplus × Younger\n      python: ${JSON.stringify(want)}\n      node:   ${JSON.stringify(got)}`);
   }
 }
 console.log(failures ? `\nFAILED: ${failures} mismatch(es)` : '\nOK: Node engine matches the Python oracle');
