@@ -14,7 +14,7 @@ import { WATCH_COUNT_ACCOUNTS } from '../env.js';
 
 // Plex omits viewCount at 0, so a missing/non-numeric value reads as 0 = unwatched (never as
 // watched — the resume-in-queue bug). Port of plex.py _int0.
-function int0(v) {
+export function int0(v) {
   const n = parseInt(v, 10);
   return Number.isFinite(n) ? n : 0;
 }
@@ -26,7 +26,7 @@ function ratingOk(item, allowed) {
 }
 
 // False if `ep` sorts BEFORE the manual start floor {season, episode}. Port of _at_or_after_start.
-function atOrAfterStart(ep, start) {
+export function atOrAfterStart(ep, start) {
   if (!start || start.episode == null) return true;
   const i = (v, d = 0) => {
     const n = parseInt(v, 10);
@@ -40,7 +40,7 @@ function atOrAfterStart(ep, start) {
 }
 
 // True if a show spans more than one real season (S0 specials don't count). Port of _multi_season.
-function multiSeason(allEps) {
+export function multiSeason(allEps) {
   const seasons = new Set();
   for (const e of allEps) {
     const s = String(e.season);
@@ -78,7 +78,7 @@ function sectionItems(client, sections, allowed, blocked, token) {
 }
 
 // Ordered flat episode list for a show (allLeaves), season/episode preserved. Port of show_episodes.
-function showEpisodes(client, showRatingKey, token) {
+export function showEpisodes(client, showRatingKey, token) {
   const mc = client.container(`/library/metadata/${showRatingKey}/allLeaves`, token);
   return (mc.Metadata || []).map((e) => ({
     ratingKey: String(e.ratingKey),
@@ -191,7 +191,7 @@ export function rewatchCounts(client, sections, allowed, accts, token) {
 // ratingKey of the Collection titled `name` in `section` (type=18), or null. Case-insensitive
 // exact title match. Port of find_collection. (No per-scan cache — one container read per lookup;
 // behaviourally identical, and the port has no module-level state to go stale across clients.)
-function findCollection(client, section, name, token) {
+export function findCollection(client, section, name, token) {
   let mc;
   try {
     mc = client.container(`/library/sections/${section}/collections?X-Plex-Container-Size=1000`, token);
@@ -207,7 +207,7 @@ function findCollection(client, section, name, token) {
 
 // Ordered child items of a collection (the collection's own `collectionSort` order — no
 // client-side re-sort). Port of collection_children.
-function collectionChildren(client, ratingKey, token) {
+export function collectionChildren(client, ratingKey, token) {
   try {
     const mc = client.container(`/library/collections/${ratingKey}/children`, token);
     return mc.Metadata || [];

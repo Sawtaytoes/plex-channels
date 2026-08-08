@@ -93,12 +93,17 @@ export function loadSets(path = SETS_PATH) {
       };
     } else {
       // Port of _queue_set (routing-relevant fields): a curated queue draws from its own
-      // sections; set_sections covers them and rewatch_sections falls to SEC_MOVIES.
+      // sections; set_sections covers them and rewatch_sections falls to SEC_MOVIES. The
+      // curated resolver (engine/resolve.js) reads these + the queue_sections mirror.
       const secs = sections.length ? sections : [SEC_MOVIES];
       cfg = {
         source: 'queue',
         episodic_sections: secs,
         item_sections: [],
+        // Python _queue_set mirrors the sections onto queue_sections/queue_section (entries are
+        // resolved/scoped against them); resolve.js reads queue_sections first, else set_sections.
+        queue_sections: secs,
+        queue_section: secs[0],
         watch_count_accounts: [1],
         plex_user: 'Bob (admin)',
         account_id: 1,
@@ -106,6 +111,10 @@ export function loadSets(path = SETS_PATH) {
         allowed_ratings: null,
         movie_ratings: null,
         movie_excludes: [],
+        // A REEL replays in full every scan (build_reel); keep_completed marks a non-consuming
+        // queue. reel implies keep_completed. Both gate next_queue's D4 mark-done persistence.
+        reel: Boolean(ent.reel),
+        keep_completed: Boolean(ent.keep_completed || ent.reel),
       };
     }
     cfg.label = ent.label || sid;

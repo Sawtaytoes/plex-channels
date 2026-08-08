@@ -118,6 +118,14 @@ jobs:
       - name: D3 engine parity (Node engine ↔ Python)
         run: node e2e/engine-parity.mjs
 
+      # D3 follow-on #2: prove server/src/engine/resolve.js resolves a curated QUEUE (next_queue)
+      # and a REEL (build_reel) byte-for-byte like queue_builder/plex.py — the title→ratingKey
+      # resolver, collection expansion, keep_episode/watched filtering, and the done/unresolved
+      # classification — by diffing both over the SAME synthetic corpus. Deterministic (non-anime
+      # queue + file-order reel; next_queue's YAML mark-done is D4 and not compared here).
+      - name: D3 curated parity (Node engine ↔ Python)
+        run: node e2e/curated-parity.mjs
+
       # Browserless e2e — self-contained: each spawns its own server on a private
       # port with private /tmp files and asserts the degraded (no Plex / no MQTT)
       # paths, so they need neither a Plex token nor Playwright. Always run.

@@ -12,9 +12,13 @@
   python -m queue_builder.cli reel demo                # reel (DEMO) ordered lineup, read-only
   python -m queue_builder.cli resolve bob "Duel (1971)"   # dry-run: resolve one title string
   python -m queue_builder.cli machine-id               # server machineIdentifier
+  python -m queue_builder.cli next-queue-json bobq      # next_queue deterministic result (parity oracle)
+  python -m queue_builder.cli reel-json demo            # build_reel ordered lineup (parity oracle)
 """
 import json
+import shutil
 import sys
+import tempfile
 
 from . import config, plex
 
@@ -169,6 +173,41 @@ def _resolve(set_name, *title_parts):
         print(f"  -> {typ.upper()}: {resolved!r} (rk={rk})")
 
 
+def _next_queue_json(set_name="bobq"):
+    """Dump next_queue's DETERMINISTIC result as JSON — the parity oracle for the Node engine's
+    nextQueue (e2e/curated-parity.mjs). next_queue mutates queues.yaml (mark_done/sweep) as a side
+    effect, so run it against a THROWAWAY copy: the returned dict is identical and the real file is
+    untouched (and the Node side, which never mutates, reads the pristine file). Non-anime queues
+    are fully deterministic (no rng); the play list is projected to ratingKeys for a stable diff."""
+    orig = config.QUEUES_PATH
+    tmp = tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False)
+    tmp.close()
+    shutil.copyfile(orig, tmp.name)
+    try:
+        config.QUEUES_PATH = tmp.name
+        res = plex.next_queue(set_name)
+    finally:
+        config.QUEUES_PATH = orig
+    print(json.dumps({
+        "set": res["set"],
+        "play": [str(e["ratingKey"]) for e in res["play"]],
+        "last": res["last"], "done": res["done"], "unresolved": res["unresolved"],
+        "remaining": res["remaining"], "offset": res["offset"],
+    }, ensure_ascii=False))
+
+
+def _reel_json(set_name="demo"):
+    """Dump build_reel's ORDERED lineup as JSON — the parity oracle for the Node engine's buildReel
+    (e2e/curated-parity.mjs). build_reel never marks anything done, so no copy is needed. Play items
+    are projected to {ratingKey, title} (movie/series/collection shapes normalize to that)."""
+    res = plex.build_reel(set_name)
+    print(json.dumps({
+        "set": res["set"],
+        "play": [{"ratingKey": str(e["ratingKey"]), "title": e.get("title")} for e in res["play"]],
+        "last": res["last"], "unresolved": res["unresolved"], "remaining": res["remaining"],
+    }, ensure_ascii=False))
+
+
 def _watched_count(set_name="younger", profile=None):
     # Same accounts + libraries the card itself uses, so this reports what the service
     # will actually do (the pool follows the channel's own libraries, not a fixed one).
@@ -211,6 +250,10 @@ def main(argv=None):
         _buckets(*rest)
     elif cmd == "rewatch-counts":
         _rewatch_counts(*rest)
+    elif cmd == "next-queue-json":
+        _next_queue_json(*rest)
+    elif cmd == "reel-json":
+        _reel_json(*rest)
     elif cmd == "watched-count":
         _watched_count(*rest)
     elif cmd == "machine-id":
