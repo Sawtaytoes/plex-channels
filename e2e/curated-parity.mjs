@@ -56,12 +56,12 @@ const client = replayClient(CORPUS);
 const reg = routing.loadSets(SETS);
 
 // Node next_queue (deterministic queue), projected to the oracle's shape.
-function nodeNextQueue(setName) {
+async function nodeNextQueue(setName) {
   const cfg = reg.sets[setName];
   const binding = routing.bindingFor(cfg);
-  const watched = select.watchedForSet(client, cfg, binding);
-  const token = client.accountToken(cfg.user_uuid);
-  const res = resolve.nextQueue(client, setName, cfg, resolve.loadEntries(setName), watched, token);
+  const watched = await select.watchedForSet(client, cfg, binding);
+  const token = await client.accountToken(cfg.user_uuid);
+  const res = await resolve.nextQueue(client, setName, cfg, resolve.loadEntries(setName), watched, token);
   return {
     set: res.set,
     play: res.play.map((e) => String(e.ratingKey)),
@@ -74,10 +74,10 @@ function nodeNextQueue(setName) {
 }
 
 // Node build_reel (deterministic file order), projected to the oracle's shape.
-function nodeReel(setName) {
+async function nodeReel(setName) {
   const cfg = reg.sets[setName];
-  const token = client.accountToken(cfg.user_uuid);
-  const res = resolve.buildReel(client, setName, cfg, resolve.loadEntries(setName), token);
+  const token = await client.accountToken(cfg.user_uuid);
+  const res = await resolve.buildReel(client, setName, cfg, resolve.loadEntries(setName), token);
   return {
     set: res.set,
     play: res.play.map((e) => ({ ratingKey: String(e.ratingKey), title: e.title ?? null })),
@@ -101,7 +101,7 @@ console.log('=== curated parity: next_queue (Node resolve.js ↔ python cli next
 const wantQ = pyCli('next-queue-json', 'bobq');
 wantQ.last = normLast(wantQ.last);
 wantQ.play = wantQ.play.map(String);
-check('bobq', wantQ, nodeNextQueue('bobq'), (r) =>
+check('bobq', wantQ, await nodeNextQueue('bobq'), (r) =>
   `play=[${r.play.join(',')}] last=${r.last ? r.last.title : '∅'} done=[${r.done.join(', ')}] `
   + `unresolved=[${r.unresolved.join(', ')}] remaining=${r.remaining} offset=${r.offset}`);
 
@@ -109,7 +109,7 @@ console.log('=== curated parity: build_reel (Node resolve.js ↔ python cli reel
 const wantR = pyCli('reel-json', 'demo');
 wantR.last = normLast(wantR.last);
 wantR.play = wantR.play.map((e) => ({ ratingKey: String(e.ratingKey), title: e.title ?? null }));
-check('demo', wantR, nodeReel('demo'), (r) =>
+check('demo', wantR, await nodeReel('demo'), (r) =>
   `play=[${r.play.map((e) => e.ratingKey).join(',')}] (${r.play.length} items) `
   + `unresolved=[${r.unresolved.join(', ')}]`);
 

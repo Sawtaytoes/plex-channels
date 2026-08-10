@@ -11,7 +11,7 @@
 //   * the play-list builders: buildReel (pure, replays in file order) and nextQueue (the
 //     deterministic classify+order core of next_queue).
 //
-// Dead-but-correct behind ENGINE=node until follow-on #3 wires it onto the preview/play seam.
+// Async client surface (await container/accountToken) so the live undici adapter works too.
 // NOT ported here (deferred to D4, the queues.py write-side): the YAML mutation next_queue does
 // as a SIDE EFFECT (queues.mark_done / clear_done / sweep_completed). nextQueue returns the same
 // dict next_queue returns — the persistence lands with D4. The anime-channel branch shuffles with
@@ -200,10 +200,10 @@ function quote(s) {
 // --------------------------------------------------------------------------- //
 // (type, title) for a ratingKey — "movie"|"show" — or [null, null]. Port of item_type. (No
 // cache — one container read per call; behaviourally identical, no stale state across clients.)
-export function itemType(client, ratingKey, token) {
+export async function itemType(client, ratingKey, token) {
   let mc;
   try {
-    mc = client.container(`/library/metadata/${ratingKey}`, token);
+    mc = await client.container(`/library/metadata/${ratingKey}`, token);
   } catch {
     return [null, null];
   }
@@ -216,10 +216,10 @@ export function itemType(client, ratingKey, token) {
 
 // [viewOffset_ms, viewCount] for one item under `token`'s account, [0, 0] on any miss. Port of
 // item_view_state.
-function itemViewState(client, ratingKey, token) {
+async function itemViewState(client, ratingKey, token) {
   let mc;
   try {
-    mc = client.container(`/library/metadata/${ratingKey}`, token);
+    mc = await client.container(`/library/metadata/${ratingKey}`, token);
   } catch {
     return [0, 0];
   }
@@ -230,27 +230,27 @@ function itemViewState(client, ratingKey, token) {
 
 // Milliseconds to resume `ratingKey` at — its viewOffset when IN-PROGRESS, else 0. Port of
 // resume_offset (the `watched` arg is deliberately not consulted; kept off the signature here).
-function resumeOffset(client, ratingKey, token) {
-  const [offset, count] = itemViewState(client, ratingKey, token);
+async function resumeOffset(client, ratingKey, token) {
+  const [offset, count] = await itemViewState(client, ratingKey, token);
   return inProgress(offset, count) ? offset : 0;
 }
 
 // Resume offset (ms) for a resolved play ITEM, reusing its live state when present. Port of
 // _head_resume_offset.
-function headResumeOffset(client, item, token) {
+async function headResumeOffset(client, item, token) {
   if (item.viewOffset != null) {
     return inProgress(item.viewOffset, item.viewCount) ? item.viewOffset : 0;
   }
-  return resumeOffset(client, item.ratingKey, token);
+  return await resumeOffset(client, item.ratingKey, token);
 }
 
 // Resolve a title string to [ratingKey, type, title] within a section, or [null, null, null].
 // Port of _resolve_title (same scoring + lowest-ratingKey tie-break).
-export function resolveTitle(client, section, title, year, guid, token) {
+export async function resolveTitle(client, section, title, year, guid, token) {
   const q = quote(title);
   let mc;
   try {
-    mc = client.container(
+    mc = await client.container(
       `/library/sections/${section}/all?title=${q}&includeGuids=1&X-Plex-Container-Size=50`, token);
   } catch {
     return [null, null, null];
@@ -293,17 +293,17 @@ function resolveSections(cfg) {
 }
 
 // Resolve one queue descriptor to [ratingKey, type, title]. Port of resolve_queue_entry.
-export function resolveQueueEntry(client, desc, cfg, token) {
+export async function resolveQueueEntry(client, desc, cfg, token) {
   const rk = desc.ratingKey;
   if (rk) {
-    const [typ, title] = itemType(client, rk, token);
+    const [typ, title] = await itemType(client, rk, token);
     if (typ == null) return [null, null, null];
     return [rk, typ, title];
   }
   const title = desc.title;
   if (!title) return [null, null, null];
   for (const sec of resolveSections(cfg)) {
-    const [rrk, typ, resolved] = resolveTitle(client, sec, title, desc.year, desc.guid, token);
+    const [rrk, typ, resolved] = await resolveTitle(client, sec, title, desc.year, desc.guid, token);
     if (typ != null) return [rrk, typ, resolved];
   }
   return [null, null, null];
@@ -326,14 +326,14 @@ function startMemberIndex(children, start) {
 
 // Ordered playable items for a `Collection: <name>` entry, across the set's sections. Port of
 // collection_items — None (null) = not found, [] = found but every child watched, [...] = items.
-export function collectionItems(client, cfg, name, watched, token, start = null, resume = false) {
+export async function collectionItems(client, cfg, name, watched, token, start = null, resume = false) {
   let collRk = null;
   let children = [];
   for (const sec of resolveSections(cfg)) {
     if (sec == null) continue;
-    collRk = findCollection(client, sec, name, token);
+    collRk = await findCollection(client, sec, name, token);
     if (collRk) {
-      children = collectionChildren(client, collRk, token);
+      children = await collectionChildren(client, collRk, token);
       break;
     }
   }
@@ -346,7 +346,7 @@ export function collectionItems(client, cfg, name, watched, token, start = null,
     const rk = String(ch.ratingKey);
     if (ch.type === 'show') {
       const epStart = i === floorAt ? start : null;
-      const childEps = showEpisodes(client, rk, token);
+      const childEps = await showEpisodes(client, rk, token);
       const specialsOk = resume && !hasRealSeasons(childEps);
       for (const e of childEps) {
         if ((!watched.has(e.ratingKey) || (resume && inProgress(e.viewOffset, e.viewCount)))
@@ -354,7 +354,7 @@ export function collectionItems(client, cfg, name, watched, token, start = null,
       }
     } else {
       if (watched.has(rk)
-        && !(resume && inProgress(...itemViewState(client, rk, token)))) continue;
+        && !(resume && inProgress(...await itemViewState(client, rk, token)))) continue;
       items.push({
         ratingKey: rk, title: ch.title, show: ch.grandparentTitle || name,
         season: ch.parentIndex, episode: ch.index, duration: ch.duration,
@@ -366,23 +366,23 @@ export function collectionItems(client, cfg, name, watched, token, start = null,
 
 // Resolve ONE member descriptor into a play batch. Port of resolve_member. Returns null when
 // UNRESOLVED; otherwise {title, type, ratingKey?, items, multi_season?} (empty items = FINISHED).
-export function resolveMember(client, desc, cfg, watched, token, defaultBatch = null, resume = false) {
+export async function resolveMember(client, desc, cfg, watched, token, defaultBatch = null, resume = false) {
   if (desc.collection) {
     const name = desc.collection;
-    const items = collectionItems(client, cfg, name, watched, token, desc.start, resume);
+    const items = await collectionItems(client, cfg, name, watched, token, desc.start, resume);
     if (items == null) return null;
     return { title: `Collection: ${name}`, type: 'collection', items };
   }
-  const [rk, typ, title] = resolveQueueEntry(client, desc, cfg, token);
+  const [rk, typ, title] = await resolveQueueEntry(client, desc, cfg, token);
   if (typ == null) return null;
   if (typ === 'movie') {
     let keepMovie = !watched.has(rk);
-    if (!keepMovie && resume) keepMovie = inProgress(...itemViewState(client, rk, token));
+    if (!keepMovie && resume) keepMovie = inProgress(...await itemViewState(client, rk, token));
     const items = keepMovie
       ? [{ title, ratingKey: rk, show: null, season: null, episode: null }] : [];
     return { title, type: 'movie', ratingKey: rk, items };
   }
-  const allEps = showEpisodes(client, rk, token);
+  const allEps = await showEpisodes(client, rk, token);
   const start = desc.start;
   const specialsOk = resume && !hasRealSeasons(allEps);
   let eps = allEps.filter((e) => (!watched.has(e.ratingKey)
@@ -405,7 +405,7 @@ const emptyResult = (setName) => ({
 
 // Resolve a REEL set to an ORDERED play list, ignoring watched-state entirely (file order IS the
 // play order; nothing is ever finished). Port of build_reel.
-export function buildReel(client, setName, cfg, entries, token, limit = 60) {
+export async function buildReel(client, setName, cfg, entries, token, limit = 60) {
   if (!entries.length) return emptyResult(setName);
   const play = [];
   const unresolved = [];
@@ -413,7 +413,7 @@ export function buildReel(client, setName, cfg, entries, token, limit = 60) {
     if (play.length >= limit) break;
     if (desc.done) continue; // a hand-tagged skip is still honored
     if (desc.collection) {
-      const items = collectionItems(client, cfg, desc.collection, new Set(), token, desc.start);
+      const items = await collectionItems(client, cfg, desc.collection, new Set(), token, desc.start);
       if (!items || !items.length) {
         unresolved.push(`Collection: ${desc.collection}`);
         continue;
@@ -421,7 +421,7 @@ export function buildReel(client, setName, cfg, entries, token, limit = 60) {
       play.push(...items.slice(0, Math.max(0, limit - play.length)));
       continue;
     }
-    const [rk, typ, title] = resolveQueueEntry(client, desc, cfg, token);
+    const [rk, typ, title] = await resolveQueueEntry(client, desc, cfg, token);
     if (typ == null) {
       unresolved.push(desc.ratingKey || desc.title || desc.key);
       continue;
@@ -429,7 +429,7 @@ export function buildReel(client, setName, cfg, entries, token, limit = 60) {
     if (typ === 'movie') {
       play.push({ title, ratingKey: rk });
     } else {
-      const eps = showEpisodes(client, rk, token);
+      const eps = await showEpisodes(client, rk, token);
       const batch = Math.max(1, Math.min(parseInt(desc.episodes || QUEUE_SERIES_DEFAULT, 10),
         QUEUE_SERIES_LENGTH));
       for (const e of eps.slice(0, batch)) play.push({ title: e.title || title, ratingKey: e.ratingKey });
@@ -445,7 +445,7 @@ export function buildReel(client, setName, cfg, entries, token, limit = 60) {
 // CHANNEL hoists in-progress members then shuffles the rest via the injected `rng`). Port of
 // next_queue MINUS its YAML side effects (mark_done / clear_done / sweep_completed → D4). The
 // returned dict matches next_queue's; parity covers the non-anime queue path (the shuffle is rng).
-export function nextQueue(client, setName, cfg, entries, watched, token, rng = null) {
+export async function nextQueue(client, setName, cfg, entries, watched, token, rng = null) {
   if (!entries.length) return emptyResult(setName);
   const newlyDone = [];
   const doneFlagged = [];
@@ -454,10 +454,10 @@ export function nextQueue(client, setName, cfg, entries, watched, token, rng = n
   let remaining = 0;
   const batches = [];
   for (const desc of entries) {
-    const res = resolveMember(client, desc, cfg, watched, token, QUEUE_SERIES_DEFAULT, true);
+    const res = await resolveMember(client, desc, cfg, watched, token, QUEUE_SERIES_DEFAULT, true);
     if (desc.done) {
       const head = res && res.items && res.items.length ? res.items[0] : null;
-      if (head && headResumeOffset(client, head, token) > 0) {
+      if (head && await headResumeOffset(client, head, token) > 0) {
         revived.push(desc.key);
         remaining += 1;
         batches.push({ title: res.title, type: res.type, items: res.items });
@@ -507,7 +507,7 @@ export function nextQueue(client, setName, cfg, entries, watched, token, rng = n
   }
   const last = playItems.length
     ? { title: leadBatch.title, type: leadBatch.type, ratingKey: playItems[0].ratingKey } : null;
-  const offset = playItems.length ? headResumeOffset(client, playItems[0], token) : 0;
+  const offset = playItems.length ? await headResumeOffset(client, playItems[0], token) : 0;
   return {
     set: setName, play: playItems, last, done: doneFlagged, unresolved, remaining, offset, revived,
   };

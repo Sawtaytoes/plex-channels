@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { WEB_PORT, QUEUES_PATH } from './config.js';
 import { ENGINE } from './env.js';
 import * as engineRouting from './engine/routing.js';
+import * as enginePreview from './engine/preview.js';
 import * as cache from './cache.js';
 import * as history from './history.js';
 import * as mqttc from './mqttc.js';
@@ -724,19 +725,55 @@ app.get('/api/generic/:id/preview', async (req, res) => {
     const s = await sets.getSet(req.params.id);
     if (!s || s.source !== 'rotation') return res.status(400).json({ error: 'not a rotation channel' });
     const profile = req.query.profile ? String(req.query.profile) : '';
-    const data = await mqttc.preview(s.id, { fresh: req.query.fresh === '1', profile });
-    // D2 seam (decision 2026-08-03-retiring-python…): behind ENGINE=node, attach the Node
-    // read-side routing for THIS set+profile (binding + section pools) alongside the
-    // Python-computed pool. Purely additive — the pool itself is still Python until D3 wires
-    // the selection engine onto this same seam. Default ENGINE=python omits it entirely.
-    if (ENGINE === 'node') {
+    // Always ask Python first during the dual-engine soak: it's the oracle we log against,
+    // and the fallback when ENGINE=node's live compute fails.
+    const py = await mqttc.preview(s.id, { fresh: req.query.fresh === '1', profile });
+    if (ENGINE !== 'node') {
+      res.json(py);
+      return;
+    }
+    // ENGINE=node: serve the Node-computed pool (live undici client) and log divergence
+    // against Python for the one-week soak (decision 2026-08-03-retiring-python…).
+    try {
+      const node = await enginePreview.previewRotation(s.id, profile);
       try {
-        data.routing = engineRouting.forSet(s.id, profile);
+        node.routing = engineRouting.forSet(s.id, profile);
       } catch (e) {
         console.log(`[engine] routing preview failed for ${s.id}: ${e.message}`);
       }
+      const bDiv = enginePreview.bucketsSignature(py.buckets) !== enginePreview.bucketsSignature(node.buckets);
+      const mDiv = enginePreview.moviePoolSignature(py.movie_pool)
+        !== enginePreview.moviePoolSignature(node.movie_pool);
+      node.divergence = Boolean(bDiv || mDiv);
+      // Keep Python's payload for soak forensics (not consumed by the UI).
+      node.python = {
+        buckets: py.buckets,
+        movie: py.movie,
+        movie_pool: py.movie_pool,
+        error: py.error || null,
+      };
+      if (node.divergence) {
+        console.log(
+          `[engine] DIVERGENCE preview set=${s.id} profile=${profile || '∅'} `
+          + `buckets=${bDiv} movie_pool=${mDiv} `
+          + `node=${(node.buckets || []).length}b python=${(py.buckets || []).length}b`,
+        );
+      } else {
+        console.log(
+          `[engine] preview set=${s.id} profile=${profile || '∅'}: node matches python `
+          + `(${(node.buckets || []).length} buckets, ${(node.movie_pool || []).length} movies)`,
+        );
+      }
+      res.json(node);
+    } catch (e) {
+      console.log(`[engine] node preview failed for ${s.id}, falling back to python: ${e.message}`);
+      try {
+        py.routing = engineRouting.forSet(s.id, profile);
+      } catch { /* ignore */ }
+      py.engine = 'python-fallback';
+      py.divergence = null;
+      res.json(py);
     }
-    res.json(data);
   } catch (e) {
     res.status(503).json({ error: String(e.message || e) });
   }
@@ -858,6 +895,6 @@ await cache.init();
 
 app.listen(WEB_PORT, () => {
   console.log(`[plex-channels-web] listening on :${WEB_PORT}`);
-  if (ENGINE === 'node') console.log('[engine] ENGINE=node — preview attaches Node read-side routing (D2)');
+  if (ENGINE === 'node') console.log('[engine] ENGINE=node — preview serves Node pool + dual-run divergence log (D3)');
   warm.start();
 });

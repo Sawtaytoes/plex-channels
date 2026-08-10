@@ -126,6 +126,10 @@ jobs:
       - name: D3 curated parity (Node engine ↔ Python)
         run: node e2e/curated-parity.mjs
 
+      # D3 follow-on #4: async engine + live-client surface + preview formatter (offline).
+      - name: D3 live-client adapter (offline)
+        run: node e2e/live-client-adapter-test.mjs
+
       # Browserless e2e — self-contained: each spawns its own server on a private
       # port with private /tmp files and asserts the degraded (no Plex / no MQTT)
       # paths, so they need neither a Plex token nor Playwright. Always run.

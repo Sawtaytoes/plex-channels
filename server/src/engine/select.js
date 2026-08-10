@@ -5,10 +5,10 @@
 //
 // Ported here: _watched_for_set, episodic_shows, section_items, show_episodes, _rating_ok,
 // _int0, _at_or_after_start, _multi_season, unwatched_buckets, plus the collection-expansion
-// blocklist (find_collection / collection_children / _expanded_blocklist). The client (live or
-// corpus replay) supplies `container(path, token)` + `accountToken(uuid)`; everything else is pure.
+// blocklist (find_collection / collection_children / _expanded_blocklist). The client (live undici or corpus replay) supplies `container(path, token)` +
+// `accountToken(uuid)` — either may return a Promise; every engine call site awaits them so both
+// work. Pure helpers stay sync.
 //
-// NOT yet ported (follow-on, tracked in the handoff): the curated next_queue and build_reel.
 import { setSections } from './routing.js';
 import { WATCH_COUNT_ACCOUNTS } from '../env.js';
 
@@ -50,10 +50,10 @@ export function multiSeason(allEps) {
 }
 
 // Shows (type=2) across `sections`, kept only if contentRating is allowed. Port of episodic_shows.
-function episodicShows(client, sections, allowed, blocked, token) {
+async function episodicShows(client, sections, allowed, blocked, token) {
   const shows = [];
   for (const sec of sections) {
-    const mc = client.container(`/library/sections/${sec}/all?type=2&X-Plex-Container-Size=5000`, token);
+    const mc = await client.container(`/library/sections/${sec}/all?type=2&X-Plex-Container-Size=5000`, token);
     for (const s of mc.Metadata || []) {
       const rk = String(s.ratingKey);
       if (blocked.has(rk) || !ratingOk(s, allowed)) continue;
@@ -64,10 +64,10 @@ function episodicShows(client, sections, allowed, blocked, token) {
 }
 
 // Standalone items (type=1, e.g. Shorts) across `sections`, rating-filtered. Port of section_items.
-function sectionItems(client, sections, allowed, blocked, token) {
+async function sectionItems(client, sections, allowed, blocked, token) {
   const items = [];
   for (const sec of sections) {
-    const mc = client.container(`/library/sections/${sec}/all?type=1&X-Plex-Container-Size=10000`, token);
+    const mc = await client.container(`/library/sections/${sec}/all?type=1&X-Plex-Container-Size=10000`, token);
     for (const m of mc.Metadata || []) {
       const rk = String(m.ratingKey);
       if (blocked.has(rk) || !ratingOk(m, allowed)) continue;
@@ -78,8 +78,8 @@ function sectionItems(client, sections, allowed, blocked, token) {
 }
 
 // Ordered flat episode list for a show (allLeaves), season/episode preserved. Port of show_episodes.
-export function showEpisodes(client, showRatingKey, token) {
-  const mc = client.container(`/library/metadata/${showRatingKey}/allLeaves`, token);
+export async function showEpisodes(client, showRatingKey, token) {
+  const mc = await client.container(`/library/metadata/${showRatingKey}/allLeaves`, token);
   return (mc.Metadata || []).map((e) => ({
     ratingKey: String(e.ratingKey),
     title: e.title,
@@ -95,7 +95,7 @@ export function showEpisodes(client, showRatingKey, token) {
 }
 
 // Every history row for one account (optionally one section). Port of _iter_history.
-export function* iterHistory(client, accountId, sectionId, page = 500) {
+export async function* iterHistory(client, accountId, sectionId, page = 500) {
   let start = 0;
   for (;;) {
     const pairs = [
@@ -107,7 +107,7 @@ export function* iterHistory(client, accountId, sectionId, page = 500) {
     if (sectionId != null) pairs.push(['librarySectionID', sectionId]);
     // urlencode mirrors Python's exactly (the sha1 corpus key is over this literal string).
     const q = pairs.map(([k, v]) => `${encQ(k)}=${encQ(v)}`).join('&');
-    const mc = client.container('/status/sessions/history/all?' + q, null);
+    const mc = await client.container('/status/sessions/history/all?' + q, null);
     const rows = mc.Metadata || [];
     for (const row of rows) yield row;
     start += rows.length;
@@ -122,12 +122,12 @@ function encQ(s) {
 }
 
 // Watched ratingKeys for a set, using the binding's own accounts. Port of _watched_for_set.
-export function watchedForSet(client, cfg, binding) {
+export async function watchedForSet(client, cfg, binding) {
   const accts = (binding && binding.watch_count_accounts) || WATCH_COUNT_ACCOUNTS;
   const watched = new Set();
   for (const acct of accts) {
     for (const sec of setSections(cfg)) {
-      for (const row of iterHistory(client, acct, sec)) {
+      for await (const row of iterHistory(client, acct, sec)) {
         if (row.ratingKey != null) watched.add(String(row.ratingKey));
       }
     }
@@ -137,23 +137,23 @@ export function watchedForSet(client, cfg, binding) {
 
 // Plex library type of a section ("movie"|"show"|…). Port of section_kind (no module cache —
 // one container read; behaviourally identical, avoids stale-cache footguns across clients).
-function sectionKind(client, section) {
-  const mc = client.container('/library/sections', null);
+async function sectionKind(client, section) {
+  const mc = await client.container('/library/sections', null);
   for (const d of mc.Directory || []) if (String(d.key) === String(section)) return d.type;
   return undefined;
 }
 
 // {ratingKey: title} for a MOVIE library's rating-allowed films. Port of _movie_films.
-function movieFilms(client, section, allowed, token) {
-  const mc = client.container(`/library/sections/${section}/all?type=1&X-Plex-Container-Size=10000`, token);
+async function movieFilms(client, section, allowed, token) {
+  const mc = await client.container(`/library/sections/${section}/all?type=1&X-Plex-Container-Size=10000`, token);
   const out = new Map();
   for (const m of mc.Metadata || []) if (ratingOk(m, allowed)) out.set(String(m.ratingKey), m.title);
   return out;
 }
 
 // {showRatingKey: title} for a SHOW library's ONE-EPISODE entries (anime films). Port of _show_films.
-function showFilms(client, section, allowed, token) {
-  const mc = client.container(`/library/sections/${section}/all?type=2&X-Plex-Container-Size=5000`, token);
+async function showFilms(client, section, allowed, token) {
+  const mc = await client.container(`/library/sections/${section}/all?type=2&X-Plex-Container-Size=5000`, token);
   const out = new Map();
   for (const s of mc.Metadata || []) if (s.leafCount === 1 && ratingOk(s, allowed)) out.set(String(s.ratingKey), s.title);
   return out;
@@ -162,15 +162,15 @@ function showFilms(client, section, allowed, token) {
 // (counts, titles) for every rewatchable item these accounts have SEEN. Port of rewatch_counts:
 // the pool IS the history, so the "seen at least once" floor is structural. counts[rk] is the
 // view count (the weighting input); the weighted PICK is rng and stays a per-language test.
-export function rewatchCounts(client, sections, allowed, accts, token) {
+export async function rewatchCounts(client, sections, allowed, accts, token) {
   const counts = new Map();
   const titles = new Map();
   for (const sec of sections) {
-    const isShow = sectionKind(client, sec) === 'show';
-    const films = isShow ? showFilms(client, sec, allowed, token) : movieFilms(client, sec, allowed, token);
+    const isShow = (await sectionKind(client, sec)) === 'show';
+    const films = isShow ? await showFilms(client, sec, allowed, token) : await movieFilms(client, sec, allowed, token);
     if (!films.size) continue;
     for (const acct of accts || WATCH_COUNT_ACCOUNTS) {
-      for (const row of iterHistory(client, acct, sec)) {
+      for await (const row of iterHistory(client, acct, sec)) {
         const rk = String(row.ratingKey);
         if (isShow) {
           const showRk = String(row.grandparentKey || '').split('/').pop();
@@ -191,10 +191,10 @@ export function rewatchCounts(client, sections, allowed, accts, token) {
 // ratingKey of the Collection titled `name` in `section` (type=18), or null. Case-insensitive
 // exact title match. Port of find_collection. (No per-scan cache — one container read per lookup;
 // behaviourally identical, and the port has no module-level state to go stale across clients.)
-export function findCollection(client, section, name, token) {
+export async function findCollection(client, section, name, token) {
   let mc;
   try {
-    mc = client.container(`/library/sections/${section}/collections?X-Plex-Container-Size=1000`, token);
+    mc = await client.container(`/library/sections/${section}/collections?X-Plex-Container-Size=1000`, token);
   } catch {
     return null; // network/query hiccup (or corpus miss): unresolved this scan, never crash
   }
@@ -207,9 +207,9 @@ export function findCollection(client, section, name, token) {
 
 // Ordered child items of a collection (the collection's own `collectionSort` order — no
 // client-side re-sort). Port of collection_children.
-export function collectionChildren(client, ratingKey, token) {
+export async function collectionChildren(client, ratingKey, token) {
   try {
-    const mc = client.container(`/library/collections/${ratingKey}/children`, token);
+    const mc = await client.container(`/library/collections/${ratingKey}/children`, token);
     return mc.Metadata || [];
   } catch {
     return [];
@@ -221,7 +221,7 @@ export function collectionChildren(client, ratingKey, token) {
 // (searched across the set's sections; a shows collection contributes show ratingKeys that
 // episodic_shows drops, a shorts collection contributes item ratingKeys that section_items drops).
 // Unresolvable collection names are skipped. Port of _expanded_blocklist.
-function expandedBlocklist(client, cfg, token) {
+async function expandedBlocklist(client, cfg, token) {
   const out = new Set();
   let sections = null;
   for (const entry of cfg.blocklist || []) {
@@ -234,9 +234,9 @@ function expandedBlocklist(client, cfg, token) {
     if (!name) continue;
     if (sections === null) sections = setSections(cfg) || [];
     for (const sec of sections) {
-      const crk = findCollection(client, sec, name, token);
+      const crk = await findCollection(client, sec, name, token);
       if (crk) {
-        for (const ch of collectionChildren(client, crk, token)) out.add(String(ch.ratingKey));
+        for (const ch of await collectionChildren(client, crk, token)) out.add(String(ch.ratingKey));
         break;
       }
     }
@@ -247,16 +247,16 @@ function expandedBlocklist(client, cfg, token) {
 // Per-bucket ordered lists of NOT-yet-watched items for a set. Port of unwatched_buckets.
 // Episodic show -> its ordered unwatched episodes; an item section (Shorts) -> ONE bucket
 // (returned in listing order — the caller shuffles; parity compares the set).
-export function unwatchedBuckets(client, cfg, binding) {
+export async function unwatchedBuckets(client, cfg, binding) {
   const allowed = binding.allowed_ratings;
-  const tok = client.accountToken(binding.user_uuid);
-  const watched = watchedForSet(client, cfg, binding);
-  const blocked = expandedBlocklist(client, cfg, tok);
+  const tok = await client.accountToken(binding.user_uuid);
+  const watched = await watchedForSet(client, cfg, binding);
+  const blocked = await expandedBlocklist(client, cfg, tok);
   const starts = cfg.starts || {};
 
   const buckets = [];
-  for (const show of episodicShows(client, cfg.episodic_sections, allowed, blocked, tok)) {
-    const allEps = showEpisodes(client, show.ratingKey, tok);
+  for (const show of await episodicShows(client, cfg.episodic_sections, allowed, blocked, tok)) {
+    const allEps = await showEpisodes(client, show.ratingKey, tok);
     const start = starts[String(show.ratingKey)];
     const eps = allEps.filter((e) => !watched.has(e.ratingKey) && atOrAfterStart(e, start));
     if (eps.length) {
@@ -264,7 +264,7 @@ export function unwatchedBuckets(client, cfg, binding) {
     }
   }
   for (const sec of cfg.item_sections || []) {
-    const items = sectionItems(client, [sec], allowed, blocked, tok)
+    const items = (await sectionItems(client, [sec], allowed, blocked, tok))
       .filter((it) => !watched.has(it.ratingKey))
       .map((it) => ({ ratingKey: it.ratingKey, title: it.title, show: 'Shorts', season: null, episode: null }));
     if (items.length) buckets.push({ show: 'Shorts', ratingKey: `section-${sec}`, episodes: items });

@@ -61,7 +61,7 @@ is untouched.
 
 **Next: D3.** D2's `forSet` seam is where the ported selection engine plugs in.
 
-### D3 — IN PROGRESS (corpus oracle + engine core landed; parity-gated)
+### D3 — LANDED through live adapter (2026-08-08); soak remaining
 
 Done and CI-gated:
 - **Corpus record/replay oracle** (`PLEX_RECORD_DIR`/`PLEX_REPLAY_DIR` in `plex.py`,
@@ -127,17 +127,25 @@ Done and CI-gated:
   × Younger` = Alpha[11,13] MovieB[2002] Delta[41,42,43] Epsilon[51] Zeta[61]. A negated dedup
   confirms the gate fails without the port.
 
-**Still to port (follow-on PRs), in order:**
-1. The **live client adapter** — an undici-backed `client` (the `container`/`accountToken` surface
-   the engine modules already take, but hitting live Plex instead of the corpus) so the
-   `ENGINE=node` preview seam (`engineRouting.forSet`, D2) serves the Node-computed pool
-   (`channelBuckets`/`nextQueue`/`buildReel`), logging divergence against the Python result for the
-   one-week soak before cutover. This is the integration step the deterministic ports #1–#3 were
-   building toward; it needs live Plex (available here) + the soak window (calendar).
+- **Live client adapter (follow-on #4, LANDED 2026-08-08)** — engine modules are **async**
+  (`await client.container` / `await client.accountToken`) so both the sync corpus replay client
+  and the undici live client work. New modules:
+  - `server/src/engine/plex-live.js` — `liveClient()` reuses `plex.plexGet` + `plex.accountToken`
+  - `server/src/engine/preview.js` — `previewRotation` / `formatBuckets` / divergence signatures
+  - `GET /api/generic/:id/preview` behind `ENGINE=node` **serves the Node pool**, keeps Python's
+    payload under `python:`, sets `divergence`, logs `[engine] DIVERGENCE …` or a match line, and
+    falls back to Python if Node throws. Default `ENGINE=python` is unchanged.
+  - Gate: `e2e/live-client-adapter-test.mjs` (required CI step) — async surface over the synthetic
+    corpus + formatter/signature checks (no live Plex in CI). Live undici smoke verified against
+    the LAN Plex (`/library/sections`).
 
-D5 (`adb.js`) needs the real Shield; D6 (`mqttd.js`) is portable but load-bearing; D7 (playback +
-`cast_sidecar/`) needs the TV + a family-hours soak; D8 (deletions + the
-lock→optimistic-concurrency swap) is last. See the table and the decision doc for each bar.
+**Still to port (follow-on PRs), in order:**
+1. **One-week dual-engine soak** — set `ENGINE=node` on the deployed app, watch
+   `[engine] DIVERGENCE` lines (and Channels view), then cut over. Calendar constraint.
+2. **D4** — `queues.py` write-side (`mark_done` / `clear_done` / `sweep_completed`) so Node can
+   persist finished curated entries (read-side already in `resolve.js`).
+3. **D5–D8** — `adb.js`, MQTT service, Node playback + cast sidecar, then delete Python. D5/D7
+   need the Shield; D8 is last. See the table and the decision doc for each bar.
 
 ### What actually runs live vs. what is inert (read this first if you're debugging behavior)
 
@@ -164,8 +172,9 @@ regardless of `ENGINE`. If live behavior changed, look here, not at the (inert) 
 - **`queues.js` / `sets.js`**: mtime-keyed memoization of `listAll()` / registry, and
   `setKeepingComment`. **Not gated**, but a Python write to the YAML changes mtime so the memo
   busts correctly.
-- **Inert until `ENGINE=node` (or `PLAYBACK_ENGINE=node`)**: `profiles.js` and every future
-  `server/src/engine/*`. Not wired to anything yet.
+- **Inert until `ENGINE=node` (or `PLAYBACK_ENGINE=node`)**: `profiles.js` (playback path)
+  and the engine modules for scan/play. **Exception:** with `ENGINE=node`, the preview
+  endpoint runs `engine/preview.js` live (dual-run vs Python). Default stays `python`.
 
 Net: the scan pipeline is unchanged; the live-affecting surfaces are all Node-web-server-side,
 undici `plexGet` and the SQLite cache being the two worth checking first.
@@ -196,7 +205,7 @@ The rest of Phase D cannot be completed in a headless dev sandbox. The blockers 
 | Phase | What it is | Blocked on |
 |---|---|---|
 | ~~D2~~ | ~~`config.py` read-side (`binding_for`, `channel_for`, `set_sections`, `rewatch_sections`)~~ | **DONE 2026-08-07** — `server/src/engine/routing.js`, gated `ENGINE=node`, parity-gated in CI (`e2e/binding-parity.mjs`). See the "D2 — LANDED" section above. |
-| D3 | The selection engine (~1,200 lines) + `e2e/engine-parity.mjs` | The harness needs a **recorded Plex corpus** produced by running the real `cli.py` (with the `PLEX_RECORD_DIR` shim) against the live config — needs `ruamel` + controlled live-Plex access — **plus a one-week dual-engine soak with divergence logging** before anything plays from it. Neither the corpus nor the soak is producible in one session. |
+| ~~D3~~ | ~~Selection engine + live preview adapter~~ | **DONE 2026-08-08** through follow-on #4 (async engine, `plex-live.js`, preview dual-run). Remaining: calendar soak with `ENGINE=node`. |
 | D4 | `queues.py` **write-side** (`mark_done`/`clear_done`/`sweep_completed` YAML round-trip). Descriptor normalization (`_describe`/`entries`) is already ported read-side in `resolve.js` (follow-on #2). | Small; portable. Gate is a byte-compare against a ruamel-written file — same `ruamel` blocker as D2 for the *comparison*, though `e2e/yaml-roundtrip-test.mjs` (shipped) already covers Node-writer comment fidelity. This is what makes the ported `nextQueue` actually persist finished entries. |
 | D5 | `adb.py` → `adb.js` | The XML-fixture unit test is portable, but acceptance is **a manual checklist against the real Shield** (`ADB_ENABLED`, a profile switch on a gated card). Needs the physical TV. |
 | D6 | MQTT service → `mqttd.js` | Portable against `e2e/fake-mqtt.mjs`, but it is the load-bearing playback path; sequencing it before D3/D7 soak would be reckless. |
@@ -205,12 +214,17 @@ The rest of Phase D cannot be completed in a headless dev sandbox. The blockers 
 
 ## Recommended resume order
 
-1. On a box **with `ruamel` and the live config**: run `cli.py` under the `PLEX_RECORD_DIR`
-   recording shim across every set/binding/behaviour to produce the corpus. That corpus is the
-   thing that unblocks D2 and D3's offline parity.
-2. D2, then D3 behind `ENGINE=node`, with the preview endpoint as its only consumer, logging
-   divergence for a week.
-3. D4, D6, then D7 with the sidecar, soaking on the real TV.
-4. D8 last, including the storage lock swap.
+1. **Soak:** deploy with `ENGINE=node`, watch dual-run `[engine] DIVERGENCE` logs for ~a week on
+   real Channels previews. Default remains `python` until that passes.
+2. **D4** write-side queue persistence, then **D6** MQTT, then **D7** playback (+ cast sidecar)
+   with real-TV acceptance outside family hours.
+3. **D5** ADB port + Shield checklist can parallel D6/D7 once TV time exists.
+4. **D8** last — delete `queue_builder/`, shrink deps, storage lock → optimistic concurrency.
 
 Nothing above changes the shipped Phases 0/A/B/C1/E/F, which are engine-independent.
+
+## Also shipped (parallel track, not the port)
+
+Queue lifecycle + playback FSM on `main` (roadmap B): SSE re-sync, TTL, resume-in-queue,
+`keep_completed`, `PLAYBACK_FSM` driver (default **off** until Shield soak). SQLite is a
+derived Plex cache only (`cache.sqlite`) — YAML stays the store.

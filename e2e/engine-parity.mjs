@@ -45,10 +45,10 @@ const reg = routing.loadSets(SETS);
 const cfg = reg.sets.kids;
 
 // Node channel_buckets (rule pool + curated members, deduped), normalized to the _buckets shape.
-function nodeChannelBuckets(set, profile) {
+async function nodeChannelBuckets(set, profile) {
   const c = reg.sets[set];
   const binding = routing.bindingFor(c, profile);
-  return rotation.channelBuckets(client, c, binding).map((bk) => {
+  return (await rotation.channelBuckets(client, c, binding)).map((bk) => {
     let eps = bk.episodes.map((e) => String(e.ratingKey));
     if (String(bk.ratingKey).startsWith('section-')) eps = [...eps].sort();
     return {
@@ -59,9 +59,9 @@ function nodeChannelBuckets(set, profile) {
 }
 
 // Node buckets, normalized to the Python `_buckets` shape (episodes as ratingKeys; shorts sorted).
-function nodeBuckets(profile) {
+async function nodeBuckets(profile) {
   const binding = routing.bindingFor(cfg, profile);
-  return select.unwatchedBuckets(client, cfg, binding).map((bk) => {
+  return (await select.unwatchedBuckets(client, cfg, binding)).map((bk) => {
     let eps = bk.episodes.map((e) => e.ratingKey);
     if (String(bk.ratingKey).startsWith('section-')) eps = [...eps].sort();
     return { show: bk.show, ratingKey: bk.ratingKey, multi_season: Boolean(bk.multi_season), episodes: eps };
@@ -69,11 +69,11 @@ function nodeBuckets(profile) {
 }
 
 // Node rewatch counts, normalized to the Python `_rewatch_counts` shape (sorted by ratingKey).
-function nodeRewatch(profile) {
+async function nodeRewatch(profile) {
   const binding = routing.bindingFor(cfg, profile);
-  const { counts, titles } = select.rewatchCounts(
+  const { counts, titles } = await select.rewatchCounts(
     client, routing.rewatchSections(cfg), binding.movie_ratings,
-    binding.watch_count_accounts, client.accountToken(binding.user_uuid));
+    binding.watch_count_accounts, await client.accountToken(binding.user_uuid));
   return [...counts.keys()].sort().map((rk) => ({ ratingKey: rk, count: counts.get(rk), title: titles.get(rk) ?? null }));
 }
 
@@ -81,7 +81,7 @@ let failures = 0;
 console.log('=== engine parity: unwatched_buckets (Node select.js ↔ python cli buckets) ===');
 for (const profile of ['Younger', 'Older']) {
   const want = pyBuckets(profile);
-  const got = nodeBuckets(profile);
+  const got = await nodeBuckets(profile);
   if (JSON.stringify(want) === JSON.stringify(got)) {
     console.log(`  ✓ ${profile}: ${got.map((b) => `${b.show}[${b.episodes.join(',')}]`).join('  ')}`);
   } else {
@@ -93,7 +93,7 @@ for (const profile of ['Younger', 'Older']) {
 console.log('=== engine parity: rewatch_counts (Node select.js ↔ python cli rewatch-counts) ===');
 for (const profile of ['Younger', 'Older']) {
   const want = pyRewatch(profile);
-  const got = nodeRewatch(profile);
+  const got = await nodeRewatch(profile);
   if (JSON.stringify(want) === JSON.stringify(got)) {
     console.log(`  ✓ ${profile}: ${got.map((c) => `${c.title}×${c.count}`).join('  ') || '(none)'}`);
   } else {
@@ -104,7 +104,7 @@ for (const profile of ['Younger', 'Older']) {
 console.log('=== engine parity: channel_buckets (Node rotation.js ↔ python cli channel-buckets-json) ===');
 {
   const want = pyChannelBuckets('kidsplus', 'Younger');
-  const got = nodeChannelBuckets('kidsplus', 'Younger');
+  const got = await nodeChannelBuckets('kidsplus', 'Younger');
   if (JSON.stringify(want) === JSON.stringify(got)) {
     console.log(`  ✓ kidsplus × Younger: ${got.map((b) => `${b.show}[${b.episodes.join(',')}]`).join('  ')}`);
   } else {
