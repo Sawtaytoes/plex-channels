@@ -1,6 +1,6 @@
 import { useVisibility } from "@charcuterie/logic"
-import { Button, Listbox } from "@charcuterie/ui"
 import type { ControlSize } from "@charcuterie/tokens"
+import { Badge, Button, Listbox } from "@charcuterie/ui"
 import type { ReactNode } from "react"
 
 /**
@@ -19,9 +19,45 @@ import type { ReactNode } from "react"
  * clicks a `[role="option"]` instead of `selectOption`.
  */
 export type SelectListboxOption = {
+  /**
+   * A short status chip rendered AFTER the label, in the row and on the trigger —
+   * a mark a skimming eye catches, which a run of identically-styled words is not.
+   * The chip is `aria-hidden`; the word is folded into the option's `textValue`
+   * instead, so the type-ahead string and the accessible name still SAY it and the
+   * meaning never lives in colour alone.
+   */
+  badge?: string
+  badgeIntent?: BadgeIntent
   isDisabled?: boolean
   label: string
   value: string
+}
+
+type BadgeIntent =
+  | "accent"
+  | "neutral"
+  | "success"
+  | "warning"
+
+/** The chip itself — one place, so every picker's marks look alike. */
+function OptionBadge({
+  intent,
+  text,
+}: {
+  intent: BadgeIntent
+  text: string
+}): ReactNode {
+  return (
+    <Badge
+      appearance="outline"
+      aria-hidden="true"
+      className="optionbadge"
+      intent={intent}
+      size="sm"
+    >
+      {text}
+    </Badge>
+  )
 }
 
 export type SelectListboxProps = {
@@ -69,7 +105,9 @@ export function SelectListbox({
 }: SelectListboxProps): ReactNode {
   const { hide, isVisible, toggle } = useVisibility()
 
-  const current = options.find((option) => option.value === value)
+  const current = options.find(
+    (option) => option.value === value,
+  )
   const triggerLabel =
     current?.label ?? placeholder ?? options[0]?.label ?? ""
 
@@ -84,8 +122,22 @@ export function SelectListbox({
       // `selectOption(sel, value)`; now it clicks `[role=option] [data-value=…]`).
       options={options.map((option) => ({
         isDisabled: option.isDisabled,
-        label: <span data-value={option.value}>{option.label}</span>,
-        textValue: option.label,
+        label: (
+          <span data-value={option.value}>
+            {option.label}
+            {option.badge ? (
+              <OptionBadge
+                intent={option.badgeIntent ?? "neutral"}
+                text={option.badge}
+              />
+            ) : null}
+          </span>
+        ),
+        // The chip is decorative, so its word rides here — screen readers and the
+        // type-ahead both read `textValue`, not the rendered node.
+        textValue: option.badge
+          ? `${option.label} — ${option.badge}`
+          : option.label,
         value: option.value,
       }))}
       selectedValue={value}
@@ -112,6 +164,12 @@ export function SelectListbox({
           type="button"
         >
           {triggerLabel}
+          {current?.badge ? (
+            <OptionBadge
+              intent={current.badgeIntent ?? "neutral"}
+              text={current.badge}
+            />
+          ) : null}
         </Button>
       }
     />

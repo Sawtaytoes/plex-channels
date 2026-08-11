@@ -408,6 +408,73 @@ function intOffset(offset) {
 //
 // `offset` (ms) is the resume point for the FIRST queued item — non-zero only for a
 // curated queue whose lead item was started but not finished.
+// What the SERVER says is playing on our target player, as {ratingKey, viewOffset} or null.
+//
+// This is resume.js's trigger. The retained now-playing topic would have been cheaper, but its
+// HA source reports `{"state":"playing", "ratingKey":null}` on this setup — a playing state it
+// cannot name — so it is unusable for deciding WHICH episode to seek. /status/sessions names
+// the episode and gives its position.
+export async function currentSession({ device = null } = {}) {
+  let data;
+  try {
+    // ADMIN token, deliberately — NOT the set's account token. /status/sessions returns an
+    // EMPTY container for a managed user, so querying as the set's profile makes every session
+    // invisible and the resume watcher silently does nothing. Measured on the live deploy while
+    // a kids' episode was playing:
+    //   currentSession({})                -> {"ratingKey":"359877","viewOffset":19485}
+    //   currentSession({setName:'shows'}) -> null
+    // The seek itself still goes out under the play token, matching playMedia.
+    data = await plexReq('GET', '/status/sessions', { token: await playToken(null) });
+  } catch {
+    return null;
+  }
+  const md = (data && data.MediaContainer && data.MediaContainer.Metadata) || [];
+  if (!md.length) return null;
+  // Prefer the session on OUR player — the house has other clients, and seeking off the back of
+  // someone else's playback would be a genuinely bad bug.
+  let wanted = null;
+  try { wanted = await findClient(device); } catch { wanted = null; }
+  const mine = md.find((m) => {
+    const p = m.Player || {};
+    if (!wanted) return true;
+    return (wanted.machineIdentifier && p.machineIdentifier === wanted.machineIdentifier)
+      || (wanted.name && p.title === wanted.name);
+  });
+  const m = mine || (wanted ? null : md[0]);
+  if (!m) return null;
+  return { ratingKey: String(m.ratingKey), viewOffset: Number(m.viewOffset || 0) };
+}
+
+// Seek the target player to `offsetMs` via Companion. Same transport as playMedia.
+//
+// Why this exists: a Plex playQueue carries NO per-item resume point, and playMedia's `offset`
+// applies only to the item it starts on. So every episode after the first restarts at 0:00 no
+// matter what progress it has — verified on the Shield 2026-08-11 (an episode with a 3m09s
+// marker began at 0:09). Seeking after the advance is the only way to honour the rest.
+export async function seekTo(offsetMs, { device = null, setName = null } = {}) {
+  const ms = intOffset(offsetMs);
+  if (!(ms > 0)) return { seeked: false, error: 'nothing to seek to' };
+  const client = await findClient(device);
+  if (!client) return { seeked: false, error: 'target client not found' };
+  const params = new URLSearchParams({
+    offset: String(ms),
+    type: 'video',
+    machineIdentifier: await machineIdentifier(),
+    'X-Plex-Target-Client-Identifier': client.machineIdentifier || '',
+    'X-Plex-Client-Identifier': CLIENT_ID,
+    commandID: '1',
+  });
+  try {
+    // Companion answers 200 with a "Failure: 200 OK" body even on success — status only.
+    await plexReq('GET', `/player/playback/seekTo?${params}`, {
+      token: await playToken(setName), host: client.uri || null,
+    });
+    return { seeked: true, offset: ms };
+  } catch (e) {
+    return { seeked: false, error: e && e.message ? e.message : String(e) };
+  }
+}
+
 export async function playRatingKeys(ratingKeys, {
   setName = null,
   device = null,

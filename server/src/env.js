@@ -96,6 +96,22 @@ export const SHIELD_CLIENT_URI = hostval('SHIELD_CLIENT_URI', 'shield_client_uri
 // stream from. Must be reachable FROM the Shield, not from this container.
 export const PLEX_LOCAL_URL = String(hostval('PLEX_LOCAL_URL', 'plex_local_url', 'http://192.0.2.10:32400')).replace(/\/+$/, '');
 
+// --- resume-on-advance (resume.js) -------------------------------------------- //
+// A Plex playQueue has no per-item resume point and playMedia's `offset` only applies to the
+// item it starts on, so episodes 2..N restart at 0:00. resume.js seeks them to their own
+// marker after the player advances. RESUME_ON_ADVANCE=0 turns the whole thing off.
+export const RESUME_ON_ADVANCE = bool('RESUME_ON_ADVANCE', true);
+// Below this, a marker means "never really started" — don't seek (default 30s).
+export const RESUME_MIN_MS = int('RESUME_MIN_MS', 30_000);
+// Past this fraction of the runtime the episode is effectively over; restarting is right.
+export const RESUME_MAX_FRACTION = Number(str('RESUME_MAX_FRACTION', '0.95')) || 0.95;
+// Only seek an episode still near its start; past this we missed the transition (or the viewer
+// scrubbed there deliberately) and yanking them backwards is worse than doing nothing.
+export const RESUME_START_WINDOW_MS = int('RESUME_START_WINDOW_MS', 120_000);
+// How often to ask the SERVER what is playing. /status/sessions is the trigger because the
+// now-playing topic's HA source reports a playing state with a null ratingKey on this setup.
+export const RESUME_POLL_MS = int('RESUME_POLL_MS', 5_000);
+
 // --- profile-driven set selection (set="auto") -------------------------------- //
 // The signed-in Plex Home profile on the Shield decides the tier; cards carry only the KIND
 // (cartoons/movie). Detection tails the PMS DEBUG log (profiles.py → profiles.js), so the log

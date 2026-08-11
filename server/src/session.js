@@ -11,8 +11,9 @@ import * as profiles from './profiles.js';
 import * as adb from './adb.js';
 import * as playback from './playback.js';
 import * as driver from './driver.js';
+import * as resume from './resume.js';
 import {
-  PLAYBACK_FSM, ADB_ENABLED, ROTATION_LENGTH, ENGINE,
+  PLAYBACK_FSM, ADB_ENABLED, ROTATION_LENGTH, ENGINE, RESUME_ON_ADVANCE,
 } from './env.js';
 
 // Mutable session (mirrors service.Session) for advance + last-played.
@@ -266,6 +267,23 @@ export async function startSession(payload = {}, opts = {}) {
 
   const ratingKeys = SESSION.queue.map((q) => q.ratingKey);
   const device = payload.target || null;
+  // Arm resume-on-advance for THIS lineup before playing: playMedia resumes only the head, so
+  // every other episode needs a seek once the player reaches it. Re-arming replaces any plan
+  // left over from the previous scan.
+  if (RESUME_ON_ADVANCE) {
+    const plan = resume.resumePlan(playItems, { headRatingKey: ratingKeys[0] });
+    resume.arm({ plan, device, setName });
+    if (plan.size) {
+      console.log(`[resume] armed ${plan.size} queued episode(s) to resume on advance: `
+        + [...plan.entries()].map(([k, v]) => `${k}@${Math.round(v / 1000)}s`).join(' '));
+      resume.startWatch({
+        fetchSession: () => playback.currentSession({ device }),
+        seek: (ms) => playback.seekTo(ms, { device, setName }),
+      });
+    }
+  } else {
+    resume.disarm();
+  }
   const setLabel = cfg.label || setName;
 
   let result;
