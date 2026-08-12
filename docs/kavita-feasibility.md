@@ -7,7 +7,7 @@ auto-advancing runtime artifact. That is the piece `playback.js` has to hand-bui
 the Shield. What Kavita does *not* have is the recipe/rotation layer that decides **what goes in
 the queue** — and that layer is precisely what this app already is.
 
-- **Verified:** 2026-08-12, against the live instance `kavita.octen.dev`, **read-only** (no
+- **Verified:** 2026-08-12, against the live instance `kavita.example.com`, **read-only** (no
   reading list was created, modified, or deleted; no progress was written).
 - **Live server version:** `0.9.0.2` (`GET /api/Server/server-info-slim`).
 - **Spec used for the write endpoints:** `openapi.json` on Kavita's `develop` branch, which
@@ -177,9 +177,9 @@ That is a UX consequence, not a design one — see the rebuild-on-launch rule in
 
 ## 6. Ownership: build lists as *his* user, not an admin
 
-Reading lists are **per-user** — `ReadingListDto` carries `ownerUserName` (verified: our lists
-report `ownerUserName: "Sawtaytoes"`). A list built with a different account's key is invisible
-to the reader that is supposed to play it.
+Reading lists are **per-user** — `ReadingListDto` carries `ownerUserName`, and on our instance
+every existing list reports the owner's own account. A list built with a *different* account's
+key is invisible to the reader that is supposed to play it.
 
 **Rule: build with the same user's API key that reads on the tablet.** This is the reading-side
 analogue of the Plex per-profile token rule, and it will fail silently — empty reader, no error
