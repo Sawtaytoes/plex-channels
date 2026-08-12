@@ -1,6 +1,7 @@
 {
   "cap_junk": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": null,
     "remove_completed_after": null,
@@ -8,6 +9,7 @@
   },
   "cap_zero": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": null,
     "remove_completed_after": null,
@@ -15,6 +17,7 @@
   },
   "capped": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": 3,
     "remove_completed_after": null,
@@ -22,6 +25,7 @@
   },
   "gate_blank": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": null,
     "remove_completed_after": null,
@@ -29,6 +33,7 @@
   },
   "gated": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": null,
     "remove_completed_after": null,
@@ -36,6 +41,7 @@
   },
   "gated_channel": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": 5,
     "remove_completed_after": null,
@@ -43,6 +49,7 @@
   },
   "jpn": {
     "audio_language": "jpn",
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": null,
     "remove_completed_after": null,
@@ -50,6 +57,7 @@
   },
   "lang_null": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": null,
     "remove_completed_after": null,
@@ -57,13 +65,31 @@
   },
   "specials": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": true,
+    "max_items": null,
+    "remove_completed_after": null,
+    "requires_profile": null
+  },
+  "stop_member": {
+    "audio_language": null,
+    "batch_stops_at": "member",
+    "include_specials": null,
+    "max_items": null,
+    "remove_completed_after": null,
+    "requires_profile": null
+  },
+  "stop_season": {
+    "audio_language": null,
+    "batch_stops_at": "season",
+    "include_specials": null,
     "max_items": null,
     "remove_completed_after": null,
     "requires_profile": null
   },
   "ttl_set": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": null,
     "remove_completed_after": "7d",
@@ -71,6 +97,7 @@
   },
   "ttl_zero": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": null,
     "remove_completed_after": "0",
@@ -78,6 +105,7 @@
   },
   "ungated": {
     "audio_language": null,
+    "batch_stops_at": null,
     "include_specials": null,
     "max_items": null,
     "remove_completed_after": null,
