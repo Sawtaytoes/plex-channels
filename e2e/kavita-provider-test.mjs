@@ -164,6 +164,48 @@ await ok('no libraries selected yields nothing rather than the whole server', as
   assert.deepEqual(play, []);
 });
 
+await ok('the lineup is CAPPED — a big library does not queue its whole backlog', async () => {
+  // Measured against the live instance: Webtoons alone has 103 series with something
+  // unread. Uncapped that is 103 sequential writes per launch, for a reading list nobody
+  // reaches the end of. The Plex rotation has always capped; so does this.
+  const many = Array.from({ length: 50 }, (_, i) => ({
+    id: 1000 + i, name: `S${i}`, libraryId: 9, format: 1,
+  }));
+  const c = {
+    ...stubClient(),
+    async seriesForLibrary() { return many; },
+    async continuePoint(id) { return { id: Number(id) * 10, number: '1', pages: 10, pagesRead: 0, seriesId: Number(id) }; },
+  };
+  const p = kavitaProvider({ def: DEF, client: c });
+  const { play, buckets } = await p.buckets({ libraries: ['9'], limit: 12 });
+  assert.equal(buckets.length, 50, 'every series should still be surveyed');
+  assert.equal(play.length, 12, `capped lineup was ${play.length}`);
+});
+
+await ok('the cap never loops forever when buckets run dry early', async () => {
+  // A library with fewer unread chapters than the cap must terminate, not spin.
+  const p = kavitaProvider({ def: DEF, client: stubClient() });
+  const { play } = await p.buckets({ libraries: ['5'], limit: 100 });
+  assert.equal(play.length, 2);
+});
+
+await ok('the lineup INTERLEAVES series rather than draining one', async () => {
+  // Rolling into a different series is the entire feature. If a queue drained series A
+  // before touching B, it would be a single-series binge with extra steps.
+  const many = [
+    { id: 1, name: 'A', libraryId: 9, format: 1 },
+    { id: 2, name: 'B', libraryId: 9, format: 1 },
+  ];
+  const c = {
+    ...stubClient(),
+    async seriesForLibrary() { return many; },
+    async continuePoint(id) { return { id: Number(id) * 100, number: '1', pages: 10, pagesRead: 0, seriesId: Number(id) }; },
+  };
+  const p = kavitaProvider({ def: DEF, client: c });
+  const { play } = await p.buckets({ libraries: ['9'], limit: 2 });
+  assert.deepEqual(play.map((i) => i.seriesId), [1, 2], 'series were not interleaved');
+});
+
 // --------------------------------------------------------------------------- //
 // materialize — the reading list is the runtime artifact, never the store
 // --------------------------------------------------------------------------- //

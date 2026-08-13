@@ -13,7 +13,30 @@
 // Do not try to make reading behave like the Shield push path. The materialize/handoff split
 // exists precisely so it does not have to.
 import { kavitaClient, readerSegment } from './kavita-client.js';
-import { KAVITA_BATCH_DEFAULT } from '../env.js';
+import { KAVITA_BATCH_DEFAULT, ROTATION_LENGTH } from '../env.js';
+
+// How many continue-point probes run at once. One call per series, and a real library here
+// has ~100 series with something unread: serially that measured 4.7s against the live
+// instance, which is dead time on a 302 the owner is waiting through after tapping a
+// bookmark. Bounded rather than unbounded because this is someone's self-hosted Kavita, not
+// a CDN — a 100-wide burst is a denial-of-service impression.
+const PROBE_CONCURRENCY = 8;
+
+/** Map with bounded concurrency, preserving input order. */
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const i = next;
+      next += 1;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
 
 // A Reading List is the RUNTIME ARTIFACT, never the store — the same standing argument as
 // docs/why-queues-not-plex-playlists.md, which transfers verbatim. A reading list is a static
@@ -81,23 +104,28 @@ export function kavitaProvider({ def, apiKey, client = null } = {}) {
      * shape it already consumes — give it chapter buckets and it interleaves series exactly
      * as it interleaves shows.
      */
-    async buckets({ cfg = {}, libraries = [], batch = null } = {}) {
+    async buckets({ cfg = {}, libraries = [], batch = null, limit = null } = {}) {
       const libIds = (libraries.length ? libraries : (cfg.libraries || [])).map(String);
       if (!libIds.length) return { play: [], buckets: [] };
       // "Read at least X chapters before switching series" — the opening ask in the
       // feasibility record. Per-set override, else the env default.
       const perSeries = Math.max(1, Number(batch ?? cfg.batch ?? KAVITA_BATCH_DEFAULT) || 1);
+      // The SAME cap the Plex rotation runs under. Without it a real library queues
+      // everything: Webtoons alone measured 103 series with something unread, which would
+      // mean 103 sequential update-by-chapter writes on every launch, for a reading list
+      // nobody will reach the end of. A queue is the next while, not the whole backlog.
+      const cap = Math.max(1, Number(limit ?? cfg.max_items ?? ROTATION_LENGTH) || ROTATION_LENGTH);
 
       const seriesLists = await Promise.all(libIds.map((id) => c.seriesForLibrary(id)));
       const allSeries = seriesLists.flat().filter(Boolean);
 
-      const buckets = [];
-      for (const s of allSeries) {
-        // A series with nothing unread yields no bucket at all, which is what keeps a
-        // finished series out of the rotation without a separate "done" store.
+      // One continue-point probe per series, bounded. A series with nothing unread yields no
+      // bucket at all, which is what keeps a finished series out of the rotation without a
+      // separate "done" store — the read state in Kavita IS the done state.
+      const probed = await mapLimit(allSeries, PROBE_CONCURRENCY, async (s) => {
         const ch = await c.continuePoint(s.id);
-        if (!ch) continue;
-        buckets.push({
+        if (!ch) return null;
+        return {
           key: `series:${s.id}`,
           title: s.name,
           seriesId: s.id,
@@ -111,16 +139,28 @@ export function kavitaProvider({ def, apiKey, client = null } = {}) {
             pages: ch.pages,
             pagesRead: ch.pagesRead,
           }],
-        });
-      }
+        };
+      });
+      const buckets = probed.filter(Boolean);
 
       // Round-robin `perSeries` at a time, so a queue reads three chapters of A, then three
-      // of B, rather than one-and-switch.
+      // of B, rather than one-and-switch. Interleaving across buckets (rather than draining
+      // one) is what buildRotation does on the Plex side, and it is what makes the queue
+      // roll into a different series instead of becoming a single-series binge.
       const play = [];
-      for (const b of buckets) {
-        for (const it of b.items.slice(0, perSeries)) {
-          play.push({ ...it, bucket: b.key, seriesFormat: b.format, libraryId: b.libraryId });
+      for (let round = 0; play.length < cap; round += 1) {
+        let placedThisRound = false;
+        for (const b of buckets) {
+          const slice = b.items.slice(round * perSeries, (round + 1) * perSeries);
+          for (const it of slice) {
+            if (play.length >= cap) break;
+            play.push({ ...it, bucket: b.key, seriesFormat: b.format, libraryId: b.libraryId });
+            placedThisRound = true;
+          }
+          if (play.length >= cap) break;
         }
+        // Every bucket is exhausted — stop, or this loops forever on a short library.
+        if (!placedThisRound) break;
       }
       return { play, buckets };
     },
