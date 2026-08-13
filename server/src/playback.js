@@ -566,8 +566,8 @@ export async function playRatingKeys(ratingKeys, {
       token: tok,
       host,
       extraHeaders: {
-        'X-Plex-Device-Name': 'plex-channels',
-        'X-Plex-Product': 'plex-channels',
+        'X-Plex-Device-Name': 'queuepilot',
+        'X-Plex-Product': 'queuepilot',
         'X-Plex-Version': '1.0',
       },
       timeoutMs: 30_000,
