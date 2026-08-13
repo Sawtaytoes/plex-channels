@@ -2,7 +2,7 @@
 //
 // CLIENT mode is the live path
 // (PLAYBACK_MODE=client permanent for this process half). CAST mode is delegated to the
-// Python cast_sidecar via MQTT `plex-channels/cmd/cast/play` (decision
+// Python cast_sidecar via MQTT `queuepilot/cmd/cast/play` (decision
 // 2026-08-03-retiring-python-except-the-cast-sidecar) — never reimplemented here.
 //
 // Playback runs under the set's own managed-user account (Younger Kids / Older Kids) via
