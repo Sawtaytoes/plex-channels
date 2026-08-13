@@ -33,12 +33,10 @@ import {
   MQTT_PORT,
   MQTT_USER,
   MQTT_PASS,
+  T_CMD_CAST_PLAY,
 } from './env.js';
 import { accountToken, plexGet } from './plex.js';
 import { getSet } from './sets.js';
-
-// Cast sidecar command topic (decision 2026-08-03). Sidecar replies on plex-channels/resp/cast.
-export const T_CMD_CAST_PLAY = 'plex-channels/cmd/cast/play';
 
 const CLIENT_ID = PLEX_CLIENT_IDENTIFIER;
 

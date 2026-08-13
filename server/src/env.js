@@ -195,6 +195,11 @@ export const MQTT_PASS = process.env.MQTT_PASS || undefined;
 export const T_CMD_START = str('T_CMD_START', 'plex-channels/cmd/session/start');
 export const T_CMD_ADVANCE = str('T_CMD_ADVANCE', 'plex-channels/cmd/session/advance');
 export const T_CMD_SOUNDTRACK = str('T_CMD_SOUNDTRACK', 'plex-channels/cmd/soundtrack/resolve');
+// Cast sidecar command topic (decision 2026-08-03). The sidecar has always read this from
+// env (cast_sidecar/service.py:18); the publisher used to hardcode it in playback.js, so the
+// two halves could be re-pointed independently and silently diverge — the sidecar sitting on
+// a topic nobody publishes to. Both halves now read the SAME env name with the SAME default.
+export const T_CMD_CAST_PLAY = str('T_CMD_CAST_PLAY', 'plex-channels/cmd/cast/play');
 // Rotation-channel preview: the request carries a `reply` topic under T_RESP_PREVIEW_BASE and
 // the computed pool is published there (request/response). Deleted at D6 — the preview
 // endpoint calls the engine in-process — but the topic names stay until then.
