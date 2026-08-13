@@ -91,7 +91,7 @@ def main():
     if not HOST:
         print("[cast_sidecar] MQTT_HOST unset; exiting", flush=True)
         sys.exit(1)
-    c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="plex-channels-cast-sidecar")
+    c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="queuepilot-cast-sidecar")
     if USER:
         c.username_pw_set(USER, PASS)
     if PORT == 8883:

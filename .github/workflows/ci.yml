@@ -1,4 +1,4 @@
-# plex-channels CI — GitHub Actions (github.com), ported 2026-08-02 from the
+# queuepilot CI — GitHub Actions (github.com), ported 2026-08-02 from the
 # retired Forgejo workflow `.gitea/workflows/ci.yml` when the repo moved to public
 # GitHub. Steps are a faithful 1:1 translation; only the runner home changed.
 #
