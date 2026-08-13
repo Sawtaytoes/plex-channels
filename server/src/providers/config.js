@@ -32,6 +32,12 @@ import { PROVIDERS_PATH, PROVIDERS_SECRETS_PATH, KAVITA_URL } from '../env.js';
 // (so a newer config on an older image is not silently dropped) but reports unsupported.
 export const KINDS = ['plex', 'kavita'];
 
+// Push a lineup at a device, or return a URL to open. Kavita is `pull` because it has no
+// cast and no webhooks at all — see docs/kavita-feasibility.md §4. This mirrors each
+// provider's own `delivery`, kept here too so the API can report it without instantiating
+// (and therefore without needing a token for an unconfigured provider).
+const DELIVERY = { plex: 'push', kavita: 'pull' };
+
 // Built-in deploy-time env names, per kind. These keep working exactly as they did before
 // this file existed, which is what makes the connector surface additive: Plex stays
 // env-only-configurable, and the root .env's KAVITA_API_KEY is honoured as-is.
@@ -199,6 +205,10 @@ export function publicView(def) {
     base_url: def.base_url,
     supported: KINDS.includes(def.kind),
     configured: isConfigured(def.id, def.kind),
+    // How a queue on this provider STARTS. Exposed so the UI can vary copy and affordances
+    // without branching on `kind` — a UI that says `if (kind === 'kavita')` has to be edited
+    // again for every future backend, which is the leak the seam exists to prevent.
+    delivery: DELIVERY[def.kind] || 'push',
   };
 }
 

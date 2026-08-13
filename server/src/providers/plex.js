@@ -17,6 +17,7 @@ import * as rotation from '../engine/rotation.js';
 import * as select from '../engine/select.js';
 import * as routing from '../engine/routing.js';
 import { liveClient } from '../engine/plex-live.js';
+import { sections as plexSections } from '../plex.js';
 import * as playback from '../playback.js';
 import * as driver from '../driver.js';
 import { ROTATION_LENGTH } from '../env.js';
@@ -69,6 +70,22 @@ export function plexProvider({ def = null, client = null } = {}) {
 
     /** Push, not pull: a card starts the show on a screen that is already on. */
     delivery: 'push',
+
+    /**
+     * Libraries, for the queue editor's provider block.
+     *
+     * Only VIDEO libraries: membership is opt-in and every video library is eligible, but a
+     * Music or Photos section can never hold something this app plays. Ids are stringified
+     * because a block's `libraries` are provider-scoped strings — the number/string split
+     * belongs to Plex's wire format, not to the block schema.
+     */
+    async libraries() {
+      const secs = await plexSections();
+      return secs
+        .filter((l) => l.video)
+        .map((l) => ({ id: String(l.id), title: l.title }))
+        .sort((a, b) => a.title.localeCompare(b.title));
+    },
 
     /**
      * Plex's per-profile identity is a managed-user token minted against plex.tv. The engine
