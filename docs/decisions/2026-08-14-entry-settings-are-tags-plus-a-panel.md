@@ -26,9 +26,10 @@ Same `li.tile` DOM in all three — only `app.css` reshapes it — so every e2e 
 `.badges`) holds in every density and a density switch can never be a markup regression.
 
 **3. Filtering a queue is not searching Plex.**
-The box at the top only ADDS (now with type + library filters, and its results split
-out what is already in this queue — picking one jumps to that entry and opens its
-panel). A separate row above the grid FILTERS the entries you already have: free text,
+The box at the top only ADDS (now with type / library / year / watch-state filters —
+the last two answered from what the section listing already carries, so neither costs a
+request — and its results split out what is already in this queue, where picking one
+jumps to that entry and opens its panel). A separate row above the grid FILTERS the entries you already have: free text,
 type, state (including **Completed / fully watched**), and sort.
 
 **4. Counts + weight are `1 / 2 / Custom…`.**
