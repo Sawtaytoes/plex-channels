@@ -92,7 +92,22 @@ export function CountPicker({
           title="Back to the presets"
           type="button"
         >
-          ▾
+          {/* An inline SVG, not "▾": the app's font ships no glyph for it, so the character
+              rendered as an empty box beside the number field. */}
+          <svg
+            aria-hidden="true"
+            height="8"
+            viewBox="0 0 10 6"
+            width="10"
+          >
+            <path
+              d="M1 1l4 4 4-4"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeWidth="1.6"
+            />
+          </svg>
         </button>
       </span>
     )
