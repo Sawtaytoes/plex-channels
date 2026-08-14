@@ -265,6 +265,13 @@ export type SearchHit = {
   sectionId: number
   childCount?: number | null
   hasThumb?: boolean
+  /** A MOVIE's own watch state (Plex omits `viewCount` at 0, so absent = unwatched). */
+  viewCount?: number
+  viewOffset?: number
+  /** A SHOW's aggregate progress — what makes "unwatched only" / "in progress" answerable
+   * for a series without a second request. */
+  leafCount?: number
+  viewedLeafCount?: number
 }
 
 export type Profile = {

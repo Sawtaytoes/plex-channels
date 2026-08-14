@@ -86,6 +86,42 @@ const keyOfHit = (hit: SearchHit) =>
     ? `title:Collection: ${hit.title}`
     : `rk:${hit.ratingKey}`
 
+/** Is a hit's release year inside one of the add box's bands? An unknown year matches none. */
+function inYearBand(
+  year: number | null | undefined,
+  band: string,
+) {
+  if (!year) return false
+  if (band === "2020s") return year >= 2020
+  if (band === "2010s") return year >= 2010 && year <= 2019
+  if (band === "2000s") return year >= 2000 && year <= 2009
+  if (band === "older") return year < 2000
+  return true
+}
+
+/**
+ * A hit's watch state, from what the section listing already carries — no extra request. A
+ * MOVIE reports its own `viewCount`/`viewOffset`; a SHOW reports the aggregate
+ * `viewedLeafCount` / `leafCount`. A collection reports neither, so it is always "unknown"
+ * and drops out of a state-filtered search rather than pretending to be unwatched.
+ */
+function watchState(hit: SearchHit): string {
+  if (hit.type === "movie") {
+    if ((hit.viewCount ?? 0) > 0) return "watched"
+    return (hit.viewOffset ?? 0) > 0
+      ? "inprogress"
+      : "unwatched"
+  }
+  if (hit.type === "show") {
+    const seen = hit.viewedLeafCount ?? 0
+    const total = hit.leafCount ?? 0
+    if (!total) return "unknown"
+    if (seen === 0) return "unwatched"
+    return seen >= total ? "watched" : "inprogress"
+  }
+  return "unknown"
+}
+
 /** An instant, un-resolved stand-in for a just-added search hit. */
 function optimisticItem(hit: SearchHit): QueueItem {
   const isCollection = hit.type === "collection"
@@ -130,6 +166,8 @@ export function QueueView({
   // exact failure the queue filter's always-visible count exists to prevent.
   const [searchType, setSearchType] = useState("")
   const [searchLibrary, setSearchLibrary] = useState("")
+  const [searchYear, setSearchYear] = useState("")
+  const [searchState, setSearchState] = useState("")
   const [hideQueued, setHideQueued] = useState(false)
 
   const q = setId ? data?.sets[setId] : undefined
@@ -260,6 +298,18 @@ export function QueueView({
               if (
                 hideQueued &&
                 keyOfHit(hit) in queuedKeys
+              ) {
+                return false
+              }
+              if (
+                searchYear &&
+                !inYearBand(hit.year, searchYear)
+              ) {
+                return false
+              }
+              if (
+                searchState &&
+                watchState(hit) !== searchState
               ) {
                 return false
               }
@@ -475,6 +525,40 @@ export function QueueView({
                 ...libraryOptions,
               ]}
               value={searchLibrary}
+            />
+          </label>
+          <label className="addpos">
+            Year
+            <SelectListbox
+              id="searchyear"
+              label="Release year"
+              onChange={setSearchYear}
+              options={[
+                { label: "Any year", value: "" },
+                { label: "2020 – now", value: "2020s" },
+                { label: "2010 – 2019", value: "2010s" },
+                { label: "2000 – 2009", value: "2000s" },
+                { label: "Before 2000", value: "older" },
+              ]}
+              value={searchYear}
+            />
+          </label>
+          <label className="addpos">
+            State
+            <SelectListbox
+              id="searchstate"
+              label="Watch state"
+              onChange={setSearchState}
+              options={[
+                { label: "Any state", value: "" },
+                { label: "Unwatched", value: "unwatched" },
+                {
+                  label: "In progress",
+                  value: "inprogress",
+                },
+                { label: "Watched", value: "watched" },
+              ]}
+              value={searchState}
             />
           </label>
           <label className="addpos addcheck">
