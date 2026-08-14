@@ -12,10 +12,7 @@ import {
   useStore,
 } from "../state/store"
 import { CountPicker } from "./CountPicker"
-import {
-  EPISODES_MAX,
-  WEIGHT_MAX,
-} from "./EntrySettings"
+import { EPISODES_MAX, WEIGHT_MAX } from "./EntrySettings"
 import { SelectListbox } from "./SelectListbox"
 
 /**
@@ -63,7 +60,9 @@ export function SelectionBar({
 
   const count = selected.size
   const hasEdit =
-    episodes !== null || weight !== null || batchStop !== KEEP
+    episodes !== null ||
+    weight !== null ||
+    batchStop !== KEEP
 
   /** One PATCH for the whole selection — see the route's comment for why not N. */
   const applyBulk = async (
@@ -106,8 +105,8 @@ export function SelectionBar({
       <span id="selcount">{`${count} selected`}</span>
 
       {/* --- the settings, applied together --- */}
-      <label>
-        Episodes
+      <div className="bulkfield">
+        <span>Episodes</span>
         {episodes === null ? (
           <button
             className="ghost"
@@ -124,9 +123,9 @@ export function SelectionBar({
             value={episodes}
           />
         )}
-      </label>
-      <label>
-        Weight
+      </div>
+      <div className="bulkfield">
+        <span>Weight</span>
         {weight === null ? (
           <button
             className="ghost"
@@ -144,9 +143,9 @@ export function SelectionBar({
             value={weight}
           />
         )}
-      </label>
-      <label>
-        Batch stops at
+      </div>
+      <div className="bulkfield">
+        <span>Batch stops at</span>
         <SelectListbox
           id="bulkstop"
           label="Batch stops at"
@@ -159,7 +158,7 @@ export function SelectionBar({
           ]}
           value={batchStop}
         />
-      </label>
+      </div>
       <button
         className="primary"
         disabled={!hasEdit}

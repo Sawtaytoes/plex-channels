@@ -442,7 +442,7 @@ export function ChannelMembers({
                   {/* One control, not the queue editor's four: a member has no batch to cap
                       or stop, so weight is the only per-member number there is. */}
                   <Tip label="How often this member comes up — a 3x member takes about three slots for every one a normal member takes when the channel is shuffled.">
-                    <label className="eps">
+                    <span className="eps">
                       <CountPicker
                         label={`Weight for ${m.title}`}
                         max={WEIGHT_MAX}
@@ -452,7 +452,7 @@ export function ChannelMembers({
                         unit="x"
                         value={m.weight ?? 1}
                       />
-                    </label>
+                    </span>
                   </Tip>
                   {m.start ? (
                     <Tip

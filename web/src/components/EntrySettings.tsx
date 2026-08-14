@@ -4,7 +4,10 @@ import { api } from "../lib/api"
 import { startLabel } from "../lib/tileFace"
 import type { BatchStop, QueueItem } from "../lib/types"
 import { refreshData } from "../state/live"
-import { openStartModal, type EntryActions } from "../state/overlays"
+import {
+  type EntryActions,
+  openStartModal,
+} from "../state/overlays"
 import {
   bumpRevision,
   getState,
@@ -145,9 +148,15 @@ export const setEntryEpisodes = (
   item: QueueItem,
   episodes: number,
 ) =>
-  patchEntry(setId, item, "episodes", { episodes }, (hit) => {
-    hit.episodes = episodes
-  })
+  patchEntry(
+    setId,
+    item,
+    "episodes",
+    { episodes },
+    (hit) => {
+      hit.episodes = episodes
+    },
+  )
 
 export const setEntryWeight = (
   setId: string,
@@ -200,7 +209,9 @@ export function EntryEditor({
   // device, or the bulk bar changes this entry underneath it.
   const { data } = useStore()
   const item = setId
-    ? data?.sets[setId]?.items.find((it) => it.key === itemKey)
+    ? data?.sets[setId]?.items.find(
+        (it) => it.key === itemKey,
+      )
     : undefined
 
   if (!isOpen || !setId || !item) return null
@@ -228,7 +239,7 @@ export function EntryEditor({
     >
       <div className="entryfields">
         {isSeries ? (
-          <label className="field">
+          <div className="field">
             <span className="fieldlabel">
               Episodes queued per play
             </span>
@@ -244,10 +255,10 @@ export function EntryEditor({
               How long this entry&rsquo;s turn is when the
               queue reaches it.
             </span>
-          </label>
+          </div>
         ) : null}
 
-        <label className="field">
+        <div className="field">
           <span className="fieldlabel">
             Weight — how often it comes up
           </span>
@@ -262,14 +273,14 @@ export function EntryEditor({
           />
           <span className="fieldhint">
             A 3x entry takes about three slots for every one
-            a normal entry takes — spread through the
-            queue, not three in a row. Only applies while
-            this set plays in a random order.
+            a normal entry takes — spread through the queue,
+            not three in a row. Only applies while this set
+            plays in a random order.
           </span>
-        </label>
+        </div>
 
         {isSeries && episodes > 1 ? (
-          <label className="field">
+          <div className="field">
             <span className="fieldlabel">
               Where the batch may stop
             </span>
@@ -297,7 +308,7 @@ export function EntryEditor({
               the next season (or, in a collection, another
               show&rsquo;s episode 1).
             </span>
-          </label>
+          </div>
         ) : null}
 
         <div className="field">

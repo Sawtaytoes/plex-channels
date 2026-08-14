@@ -382,7 +382,7 @@ export function ChannelPool({
                 the same question as "play this show twice as often", and the bucket is
                 keyed `section-<id>` in the map exactly as the engine keys it. */}
             <Tip label="How often this comes up — a 3x show takes about three slots for every one a normal show takes in the rotation.">
-              <label className="eps">
+              <span className="eps">
                 <CountPicker
                   label={`Weight for ${b.show}`}
                   max={WEIGHT_MAX}
@@ -398,7 +398,7 @@ export function ChannelPool({
                     1
                   }
                 />
-              </label>
+              </span>
             </Tip>
             {isSection ? null : (
               <ExcludeButton

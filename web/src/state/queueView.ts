@@ -72,10 +72,13 @@ function readView(setId: string | null): QueueView {
 }
 
 export const isFiltered = (f: QueueFilters) =>
-  Boolean(f.text.trim() || f.type || f.state) || f.sort !== "queue"
+  Boolean(f.text.trim() || f.type || f.state) ||
+  f.sort !== "queue"
 
 export function useQueueView(setId: string | null) {
-  const [view, setView] = useState<QueueView>(() => readView(setId))
+  const [view, setView] = useState<QueueView>(() =>
+    readView(setId),
+  )
 
   // Switching queues loads THAT queue's view. Keyed on the id rather than remounting the whole
   // grid, so the poster images already in cache stay put.
@@ -88,7 +91,10 @@ export function useQueueView(setId: string | null) {
       setView(next)
       if (!setId) return
       try {
-        window.localStorage.setItem(KEY(setId), JSON.stringify(next))
+        window.localStorage.setItem(
+          KEY(setId),
+          JSON.stringify(next),
+        )
       } catch {
         /* storage full or blocked: the view still works for this session */
       }
@@ -100,10 +106,15 @@ export function useQueueView(setId: string | null) {
     density: view.density,
     filters: view.filters,
     isFiltered: isFiltered(view.filters),
-    resetFilters: () => write({ ...view, filters: EMPTY_FILTERS }),
-    setDensity: (density: Density) => write({ ...view, density }),
+    resetFilters: () =>
+      write({ ...view, filters: EMPTY_FILTERS }),
+    setDensity: (density: Density) =>
+      write({ ...view, density }),
     setFilters: (patch: Partial<QueueFilters>) =>
-      write({ ...view, filters: { ...view.filters, ...patch } }),
+      write({
+        ...view,
+        filters: { ...view.filters, ...patch },
+      }),
   }
 }
 
@@ -131,20 +142,26 @@ export function applyFilters(
     if (f.type && it.type !== f.type) return false
     if (f.state === "done" && !it.done) return false
     if (f.state === "active" && it.done) return false
-    if (f.state === "overrides" && !hasOverrides(it)) return false
-    if (f.state === "weighted" && (it.weight ?? 1) < 2) return false
+    if (f.state === "overrides" && !hasOverrides(it))
+      return false
+    if (f.state === "weighted" && (it.weight ?? 1) < 2)
+      return false
     if (f.state === "start" && !it.start) return false
     return true
   })
   if (f.sort === "title") {
     return [...out].sort((a, b) =>
-      a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
+      a.title.localeCompare(b.title, undefined, {
+        sensitivity: "base",
+      }),
     )
   }
   if (f.sort === "weight") {
     // Heaviest first; ties keep the queue's own order, so this reads as "the weighted ones,
     // then everything else as it sits" rather than an arbitrary reshuffle.
-    return [...out].sort((a, b) => (b.weight ?? 1) - (a.weight ?? 1))
+    return [...out].sort(
+      (a, b) => (b.weight ?? 1) - (a.weight ?? 1),
+    )
   }
   return out
 }

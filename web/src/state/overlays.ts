@@ -127,7 +127,10 @@ export const closeDynModal = () => set({ dynModal: null })
 
 // Opening the entry panel closes the tile menu that usually launched it, the same way
 // openStartModal does — two overlays over one tile is never intended.
-export const openEntryEditor = (setId: string, key: string) =>
-  set({ entryEditor: { key, setId }, tileMenu: null })
+export const openEntryEditor = (
+  setId: string,
+  key: string,
+) => set({ entryEditor: { key, setId }, tileMenu: null })
 
-export const closeEntryEditor = () => set({ entryEditor: null })
+export const closeEntryEditor = () =>
+  set({ entryEditor: null })

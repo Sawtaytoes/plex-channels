@@ -249,14 +249,18 @@ export function QueueView({
             // libraries". Narrowing its answer is the editor's job, and doing it in one place
             // keeps the row renderer dumb.
             const filtered = results.filter((hit) => {
-              if (searchType && hit.type !== searchType) return false
+              if (searchType && hit.type !== searchType)
+                return false
               if (
                 searchLibrary &&
                 String(hit.sectionId) !== searchLibrary
               ) {
                 return false
               }
-              if (hideQueued && keyOfHit(hit) in queuedKeys) {
+              if (
+                hideQueued &&
+                keyOfHit(hit) in queuedKeys
+              ) {
                 return false
               }
               return true
@@ -326,7 +330,9 @@ export function QueueView({
                   if (!setId) return
                   // Clear any filter hiding it, or "jump to" would scroll to nothing.
                   if (
-                    !items.some((it) => it.key === queuedKey)
+                    !items.some(
+                      (it) => it.key === queuedKey,
+                    )
                   ) {
                     view.resetFilters()
                   }
@@ -629,14 +635,25 @@ export function QueueView({
             })
           }
           options={[
+            // A CHANNEL has no play order to preserve — its members are shuffled, and the
+            // grid already lists them alphabetically for lookup — so its "stored order"
+            // option IS A→Z, and offering a second A→Z entry would be two options with the
+            // same value.
+            ...(isChannel
+              ? [
+                  {
+                    label: "A → Z (playback is random)",
+                    value: "queue",
+                  },
+                ]
+              : [
+                  { label: "Queue order", value: "queue" },
+                  { label: "A → Z", value: "title" },
+                ]),
             {
-              label: isChannel
-                ? "A → Z (stored order is random)"
-                : "Queue order",
-              value: isChannel ? "title" : "queue",
+              label: "Weight, high first",
+              value: "weight",
             },
-            { label: "A → Z", value: "title" },
-            { label: "Weight, high first", value: "weight" },
           ]}
           size="sm"
           value={view.filters.sort}

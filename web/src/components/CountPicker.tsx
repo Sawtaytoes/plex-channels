@@ -36,7 +36,8 @@ export function CountPicker({
   unit?: "" | "x"
   value: number
 }) {
-  const preset = (n: number) => (unit === "x" ? `${n}x` : String(n))
+  const preset = (n: number) =>
+    unit === "x" ? `${n}x` : String(n)
   const isPreset = value === 1 || value === 2
   // `isCustom` is UI state, not derived state: picking Custom… must show the field BEFORE a
   // number exists to derive it from, and it must stay open while you type 1 on the way to 12.
@@ -104,7 +105,9 @@ export function CountPicker({
         if (v === CUSTOM) {
           setIsCustom(true)
           // Focus the field it just became, or picking Custom… means picking up the mouse again.
-          requestAnimationFrame(() => fieldRef.current?.focus())
+          requestAnimationFrame(() =>
+            fieldRef.current?.focus(),
+          )
           return
         }
         onChange(parseInt(v, 10))

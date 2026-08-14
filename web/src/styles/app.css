@@ -1140,7 +1140,8 @@ body.sdrag .shelf:not(.dragging) {
 #selbar:not([hidden]) {
   display: flex;
 } /* the [hidden] attr must win when set */
-#selbar label {
+#selbar label,
+#selbar .bulkfield {
   color: var(--color-content-muted);
   display: flex;
   gap: 6px;
@@ -2329,9 +2330,9 @@ header h1 input {
 /* ---- Density: CARDS. Poster left, everything else right, several per row. ---- */
 ul.grid.cards {
   grid-template-columns: repeat(
-    auto-fill,
-    minmax(340px, 1fr)
-  );
+      auto-fill,
+      minmax(340px, 1fr)
+    );
   gap: 12px;
   align-items: start;
 }
