@@ -24,7 +24,43 @@ export const SERVER_ENTRY = path.join(REPO_ROOT, 'server', 'src', 'index.ts');
  * Start the server exactly the way e2e/run.sh does. Options are passed straight to `spawn`,
  * so a caller keeps its own env / stdio; `cwd` defaults to the repo root because several
  * harnesses used to rely on being launched from there.
+ *
+ * `detached: true` puts the child in its OWN PROCESS GROUP, and that is a correctness fix
+ * rather than tidiness. tsx does not become the server: it FORKS node, so the server is this
+ * process's GRANDchild. A plain `srv.kill()` reaps only the tsx wrapper, the grandchild
+ * reparents to PID 1, and it goes on holding the port.
+ *
+ * The failure that causes is a FALSE PASS, which is why it matters: the next run's server
+ * hits EADDRINUSE and dies, the harness then asserts against the ORPHAN from the previous
+ * run — happily green, testing code that may no longer exist — and only exits non-zero later,
+ * on an `exit` event that never settles. Three such orphans were found squatting 18768/18790/
+ * 21883, one of them started from a harness file that had since been deleted.
+ *
+ * Callers must therefore stop the server with `killServer(srv)` below, never `srv.kill()`.
  */
 export function spawnServer(options = {}) {
-  return spawn(TSX_BIN, [SERVER_ENTRY], { cwd: REPO_ROOT, ...options });
+  return spawn(TSX_BIN, [SERVER_ENTRY], { cwd: REPO_ROOT, detached: true, ...options });
+}
+
+/**
+ * Stop a server started by `spawnServer` — the whole process group, so the node grandchild
+ * behind the tsx wrapper dies with it.
+ *
+ * Negating the pid is what addresses the group. Guarded because the group is already gone in
+ * the ordinary case where the server exited on its own, and an ESRCH there would abort a
+ * harness during cleanup — after its assertions had already passed.
+ */
+export function killServer(srv, signal = 'SIGKILL') {
+  if (!srv || srv.pid === undefined) return;
+  try {
+    process.kill(-srv.pid, signal);
+  } catch {
+    // Already reaped, or never made it into its own group: fall back to the direct kill so a
+    // lone wrapper still goes away.
+    try {
+      srv.kill(signal);
+    } catch {
+      /* nothing left to kill */
+    }
+  }
 }
