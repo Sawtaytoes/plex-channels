@@ -33,12 +33,16 @@ const shot = async (name) => {
   console.log('wrote', path);
 };
 
-for (const [label, density] of [['posters', 'Posters'], ['cards', 'Cards'], ['list', 'List']]) {
+// The third density is labelled "List" after this change and "Rows" before it — the shot
+// script has to drive BOTH so the before/after pair is the same three views.
+for (const [label, ...names] of [['posters', 'Posters'], ['cards', 'Cards'], ['list', 'List', 'Rows']]) {
   // The density control is a radiogroup; its options are labelled by their visible text.
-  // "List" is the label whose stored value is still `rows`.
-  const opt = page.getByRole('radio', { name: density, exact: true });
-  if (await opt.count()) await opt.first().click();
-  else await page.getByText(density, { exact: true }).first().click();
+  let clicked = false;
+  for (const name of names) {
+    const opt = page.getByRole('radio', { name, exact: true });
+    if (await opt.count()) { await opt.first().click(); clicked = true; break; }
+  }
+  if (!clicked) throw new Error(`no density control matching ${names.join('/')}`);
 
   await page.mouse.move(0, 0);
   await shot(`${label}-rest`);
