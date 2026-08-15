@@ -1802,6 +1802,24 @@ a.playbtn {
   border: none;
 }
 
+/* RESERVE THE SCROLLBAR'S WIDTH, ALWAYS — even on a page short enough not to need one.
+   This is not cosmetic. Both this rule below and @charcuterie/ui's `lockScrollBehind`
+   freeze the page by setting `overflow: hidden` on <html>, which on a classic (non-overlay)
+   scrollbar DELETES the scrollbar and hands its ~15px back to the layout viewport. The grid
+   is `repeat(auto-fill, minmax(340px, 1fr))`, so at the wrong window width those 15px are a
+   whole extra column: opening the per-entry panel silently reflowed the queue behind it from
+   two columns to three, and the shorter document clamped the scroll position, so closing the
+   panel left you somewhere else in the list. Reserving the gutter makes the layout width
+   invariant under the lock, which kills both symptoms at once.
+   (decision `2026-08-15-the-scrollbar-gutter-is-reserved`)
+
+   Agents: the sandbox's headless Chromium uses OVERLAY scrollbars, which take no layout
+   width — this bug is invisible there and only reproduces on a real desktop browser. Test
+   it by changing the viewport width by 15px and watching the column count, not by opening
+   a modal in Playwright. */
+html {
+  scrollbar-gutter: stable;
+}
 /* While a modal is open, freeze the page so touch-scrolling stays inside the
    dialog instead of falling through to the background (native <dialog> doesn't
    lock scroll on its own). overscroll-behavior on the dialogs stops the scroll
