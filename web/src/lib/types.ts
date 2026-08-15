@@ -248,6 +248,19 @@ export type RegistrySet = {
    */
   delivery: "push" | "pull"
   /**
+   * The WORDS this queue's medium is described in, from its own provider. Every affordance
+   * that names an action or a count reads this instead of hardcoding Plex's vocabulary —
+   * `delivery` says how a queue starts, this says what it is CALLED, and a tile that had
+   * only the first said "Play “The Sword-Eating Swordmaster” now".
+   */
+  vocabulary: ProviderVocabulary
+  /**
+   * The KIND of backend (`plex` / `kavita`). Rendered as `data-provider` so the stylesheet
+   * paints this queue in its own service's colour — the kind and not the id, so a second
+   * Kavita added at runtime is still Kavita-green.
+   */
+  provider_kind: string
+  /**
    * Curated queues only. Non-consuming / playlist mode: the engine never marks entries
    * done, so the lineup stays re-showable. `reel: true` implies this (normalize reports
    * both). Absent/false on rotation channels.
@@ -269,6 +282,15 @@ export type RegistrySet = {
    * entry can override it. null/absent = no boundary (fill the batch across anything).
    */
   batch_stops_at?: BatchStop
+  /**
+   * Curated queues only. This queue's DEFAULT batch — how many items one entry contributes
+   * per visit when the entry says nothing. null/absent = the engine default of 1.
+   *
+   * Per QUEUE, never global: "For Plex, 1 episode is no big [deal], but for Webtoons and
+   * Manga I'd prefer to default to 3 chapters — by choice for this queue" (owner,
+   * 2026-08-15). A per-entry `episodes` still wins over it.
+   */
+  episodes?: number | null
   audio_language?: string
   superseded_by?: string | null
   // The ultra-legacy single-binding mirror, still read by `activeBinding`.
@@ -432,6 +454,26 @@ export type ProviderInfo = {
    * UI reads this rather than branching on `kind`, so a third backend needs no UI change.
    */
   delivery: "push" | "pull"
+  vocabulary: ProviderVocabulary
+}
+
+/**
+ * The words a provider's medium is described in. Mirrors the server's `ProviderVocabulary`.
+ *
+ * Deliberately just labels: anything a provider DOES lives server-side. This is the layer
+ * that stops "Play"/"episode" from being written into components that render both media.
+ */
+export type ProviderVocabulary = {
+  /** "Play" / "Read". */
+  verb: string
+  /** "episode" / "chapter". */
+  unit: string
+  /** "episodes" / "chapters". */
+  units: string
+  /** "show" / "series". */
+  member: string
+  /** "watched" / "read". */
+  done: string
 }
 
 /** A provider's own libraries. Ids are provider-scoped and stay bare strings. */

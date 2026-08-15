@@ -30,7 +30,13 @@ import { providerFor } from './index.js';
  * Returns `[]` for a rule-based channel, which is what tells `buckets()` to fall back to the
  * libraries — see the note on `BucketsContext.entries`.
  */
-async function curatedEntries(setId: string): Promise<CuratedEntryRef[]> {
+/** A batch value off the YAML, or null when it is absent/unusable (never 0 — see setBatch). */
+const toBatch = (raw: unknown): number | null => {
+  const n = parseInt(String(raw ?? ''), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+async function curatedEntries(setId: string, only: string | null = null): Promise<CuratedEntryRef[]> {
   let rows;
   try {
     rows = await queues.listSet(setId);
@@ -41,7 +47,12 @@ async function curatedEntries(setId: string): Promise<CuratedEntryRef[]> {
   }
   const out: CuratedEntryRef[] = [];
   for (const e of rows) {
-    if (e.done) continue;
+    // "Read THIS one now" — the ▶ on a single tile. A named entry is taken even when it is
+    // marked done, because asking for it by key is an explicit choice; the `done` skip below
+    // is for the unfiltered lineup, where re-serving finished reading is the bug.
+    if (only) {
+      if (e.key !== only) continue;
+    } else if (e.done) continue;
     const { ratingKey, extras } = splitEntry(e.value);
     // A pull provider's items are addressed by the provider's own id, which an entry stores
     // in `ratingKey`. A title-only entry (no id) cannot be resolved against Kavita at all,
@@ -65,7 +76,7 @@ export type LaunchDescriptor =
  */
 export async function launchDescriptor(
   setId: string,
-  { client = null }: { client?: PlexClient | null } = {},
+  { client = null, only = null }: { client?: PlexClient | null; only?: string | null } = {},
 ): Promise<LaunchDescriptor> {
   const reg = routing.loadSets();
   const cfg = reg?.sets?.[setId];
@@ -108,15 +119,21 @@ export async function launchDescriptor(
 
   const { play } = await provider.buckets({
     cfg,
-    libraries: block.libraries,
+    // A single named entry is not the queue's own pool, so the library fallback must not
+    // apply: if that one entry has nothing unread the answer is "nothing left", never the
+    // whole shelf.
+    libraries: only ? [] : block.libraries,
     // What the owner actually put in this queue. Without it a curated reading queue plays
     // the library shelf instead of its own ninety-three entries.
-    entries: await curatedEntries(setId),
+    entries: await curatedEntries(setId, only),
     // Same rule playbackRoutes uses to call a curated set random: `kind: anime` is the
     // "members play in random order" channel the editor offers.
     isRandomOrder: cfg.kind === 'anime',
-    // The queue's own per-visit batch, overridable per entry inside buckets().
-    batch: block.batch ?? null,
+    // The queue's own per-visit batch, overridable per entry inside buckets(). Same
+    // precedence the Plex resolver uses (entry > set > env): `cfg.episodes` is the SET's,
+    // and the block's older `batch` is honoured beneath it so a hand-written providers.yaml
+    // keeps working.
+    batch: toBatch(cfg.episodes) ?? block.batch ?? null,
   });
   if (!play.length) {
     return { error: `queue '${setId}' has nothing unread left`, status: 409 };
@@ -148,7 +165,13 @@ export function launcherRoutes(): Hono {
 
   app.get('/go/:setId', async (c) => {
     try {
-      const d = await launchDescriptor(c.req.param('setId') || '');
+      // `?only=<entryKey>` is "read THIS one now" — the ▶ on a single tile. The pull
+      // counterpart of the play-one-entry key the push path already threads; without it a
+      // reading tile's ▶ could only open the Plex device menu, which offered a Shield, a
+      // Plex Dash and a phone for something none of them can open (reported live 2026-08-15).
+      const d = await launchDescriptor(c.req.param('setId') || '', {
+        only: c.req.query('only') || null,
+      });
       // `d.url === undefined` and not `d.error` — same branch, but it discriminates the union
       // so the redirect below knows it has a string.
       if (d.url === undefined) return c.text(d.error, d.status as ContentfulStatusCode);

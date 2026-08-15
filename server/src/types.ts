@@ -57,6 +57,32 @@ export type Delivery = 'push' | 'pull';
 export type MediaUnit = 'episode' | 'chapter' | 'volume';
 
 /**
+ * The WORDS a provider's medium is described in — the provider's own fact, exposed so no
+ * copy anywhere above the seam has to branch on `kind`.
+ *
+ * Reported from the live app, 2026-08-15: a tile on the Kavita queue said
+ * *Play “The Sword-Eating Swordmaster” now*. `delivery` already told the UI that queue hands
+ * back a URL rather than pushing at a device, but nothing told it the verb — so every
+ * affordance kept Plex's vocabulary on a medium nobody plays.
+ *
+ * Deliberately just the words. Anything a provider DOES belongs on `Provider`; this is the
+ * label layer, and keeping it separate is what lets it be serialized to the browser (which
+ * cannot call `materialize()`) without dragging behaviour across the wire.
+ */
+export interface ProviderVocabulary {
+  /** The imperative on a start affordance: "Play" / "Read". */
+  verb: string;
+  /** What one lineup item is, singular: "episode" / "chapter". */
+  unit: string;
+  /** …and plural, because English is not reliably `+ 's'` for every future backend. */
+  units: string;
+  /** What a lineup MEMBER is: "show" / "series". */
+  member: string;
+  /** The finished state, for "All watched" / "All read". */
+  done: string;
+}
+
+/**
  * A manual START floor: begin here, WITHOUT marking anything earlier watched.
  *
  * Built by two writers that agree on the shape: `queues.js normalizeStart()` (per-entry,
@@ -199,6 +225,17 @@ interface SetRegistryCommon {
   /** ALWAYS a list, never null — a legacy set reports its one implicit Plex block. */
   providers: ProviderBlock[];
   delivery: Delivery;
+  /** The words this set's medium is described in, from its own provider. See `sets.ts`. */
+  vocabulary: ProviderVocabulary;
+  /**
+   * The KIND of backend this set draws from (`plex` / `kavita`), for the UI's
+   * `[data-provider]` accent scoping.
+   *
+   * The kind and not the provider ID, because a second Kavita added from the connector
+   * surface has its own id (`my-kavita`) and must still come out Kavita-green — keying the
+   * stylesheet on ids would silently drop such a queue back to the neutral accent.
+   */
+  provider_kind: string;
   /** Per-scan cap; blank/<=0 = no limit. Applies to queues AND channels. */
   max_items: number | null;
   /** `enabled: false` is the only falsy form — absent reads as enabled. */
@@ -216,6 +253,16 @@ export interface QueueSet extends SetRegistryCommon {
   /** TTL string ("24h"/"7d"/…) or null = keep finished entries forever (the default). */
   remove_completed_after: string | null;
   batch_stops_at: BatchStop;
+  /**
+   * This queue's DEFAULT batch: how many items one entry contributes per visit when the
+   * entry says nothing. null = the engine default (env `QUEUE_SERIES_DEFAULT`, which is 1).
+   *
+   * Per QUEUE and not global, because the right number differs by medium: "For Plex, 1
+   * episode is no big [deal], but for Webtoons and Manga I'd prefer to default to 3
+   * chapters — by choice for this queue" (owner, 2026-08-15). A per-entry `episodes:` still
+   * wins over it.
+   */
+  episodes: number | null;
 }
 
 /** A dynamic channel as the web API reports it (`source: 'rotation'`). */
@@ -317,6 +364,9 @@ interface RoutingSetCfgCommon {
   remove_completed_after?: string;
   include_specials?: true;
   batch_stops_at?: string;
+  /** The set's default batch — how many items one entry contributes per visit. See
+   *  resolve.ts `setBatch()`; entry `episodes:` overrides it, env is the floor. */
+  episodes?: string;
   audio_language?: string;
   /** Always set (null when uncapped), unlike the passthroughs above it. */
   max_items: number | null;
