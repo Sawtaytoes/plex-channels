@@ -9,7 +9,7 @@
 //
 // Correctness of the response SHAPE is api-v2-test.mjs / verify-members.mjs; this is purely
 // about call counts. So the stub returns structurally-valid but content-arbitrary payloads.
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { once } from 'node:events';
 import http from 'node:http';
 import net from 'node:net';
@@ -95,7 +95,7 @@ await new Promise((r) => broker.listen(MQTT_PORT, r));
 
 const WEB_PORT = 18795;
 const BASE = `http://localhost:${WEB_PORT}`;
-const srv = spawn('node', ['server/src/server.js'], {
+const srv = spawnServer({
   cwd: ROOT,
   env: {
     ...process.env,
@@ -110,9 +110,16 @@ const srv = spawn('node', ['server/src/server.js'], {
   },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
-for await (const chunk of srv.stdout) {
-  if (String(chunk).includes('listening on')) break;
-}
+// Wait for readiness by LISTENING, never by `for await (… of srv.stdout) { break }`: breaking
+// out of an async iterator destroys the stream, which closes the read end of the child's
+// stdout pipe. The server survived that only for as long as it had nothing more to say —
+// once the plex.tv device sweep started logging (`[devices] …`, which this suite triggers by
+// connecting a real broker) the next console.log killed the server with EPIPE mid-run and the
+// suite hung until its timeout. Draining for the whole run keeps the pipe open.
+await new Promise((resolve) => {
+  srv.stdout.on('data', (chunk) => { if (String(chunk).includes('listening on')) resolve(); });
+});
+srv.stdout.resume(); // keep draining for the rest of the run — a full pipe would stall the server
 // Give mqttc a moment to connect + subscribe.
 await new Promise((r) => setTimeout(r, 500));
 

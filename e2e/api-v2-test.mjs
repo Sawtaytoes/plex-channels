@@ -3,7 +3,7 @@
 // `done` surfacing (B), collection-typed add + `collections=1` search (C), per-account
 // /api/ratings with static fallback (D), and rotation createSet/updateSet knobs (E + I).
 // Plex/plex.tv are unreachable here, so the Plex-dependent bits assert the DEGRADED path.
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 
 const PORT = 18772;
@@ -45,7 +45,7 @@ for (const f of [QUEUES, SETS, HIST]) {
 await fs.writeFile(QUEUES, QUEUES_SEED, 'utf8');
 
 async function startServer() {
-  const child = spawn('node', ['server/src/server.js'], { env, stdio: 'ignore' });
+  const child = spawnServer({ env, stdio: 'ignore' });
   for (let i = 0; i < 50; i++) {
     try { await api('/history'); return child; } catch { await new Promise((r) => setTimeout(r, 200)); }
   }

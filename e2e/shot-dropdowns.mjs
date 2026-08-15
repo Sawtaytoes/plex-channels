@@ -3,7 +3,7 @@
 //  2. The tier picker open — a themed Listbox, not the native OS dropdown.
 //  3. The queue Add-to position picker open — same.
 import { chromium } from './playwright.mjs';
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -26,7 +26,7 @@ await fs.copyFile(`${ROOT}/e2e/fixtures/sets.fixture.yaml`, '/tmp/sets-shot.yaml
 for (const p of ['/tmp/sets-shot.yaml.lock', '/tmp/queues-shot.yaml.lock']) await fs.rm(p, { force: true });
 
 const fake = await startFakeMqtt({ port: FAKE });
-const srv = spawn('node', [`${ROOT}/server/src/server.js`], {
+const srv = spawnServer({
   env: { ...process.env, QUEUES_PATH: '/tmp/queues-shot.yaml', SETS_PATH: '/tmp/sets-shot.yaml',
     HISTORY_PATH: '/tmp/.history-shot.json', WEB_PORT: String(PORT),
     MQTT_HOST: '127.0.0.1', MQTT_PORT: String(FAKE), NODE_TLS_REJECT_UNAUTHORIZED: '0' },

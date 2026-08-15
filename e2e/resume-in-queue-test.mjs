@@ -172,11 +172,14 @@ const UNDICI_STUB = `
 `;
 globalThis.__PLEX_CALLS = CALLS;
 const { registerHooks } = await import('node:module');
+// Extension-blind parent match (see e2e/stubs/module-id.mjs): the old /(playback|plex)\.js$/
+// stopped matching when those modules became .ts, and undici went to the real Plex host.
+const { parentIs } = await import('./stubs/module-id.mjs');
+const fromPlexIO = parentIs('/server/src/playback', '/server/src/plex');
 const undiciUrl = `data:text/javascript,${encodeURIComponent(UNDICI_STUB)}`;
 registerHooks({
   resolve(spec, ctx, next) {
-    const parent = ctx && ctx.parentURL ? ctx.parentURL : '';
-    if (spec === 'undici' && /\/server\/src\/(playback|plex)\.js$/.test(parent)) {
+    if (spec === 'undici' && fromPlexIO(ctx)) {
       return { url: undiciUrl, shortCircuit: true };
     }
     return next(spec, ctx);

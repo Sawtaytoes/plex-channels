@@ -6,7 +6,7 @@
 // Boots THIS checkout's server against the fixture on a private port, then makes raw fetches
 // with hand-set Accept-Encoding. Needs the Vite build present (web/dist) — e2e/run.sh builds
 // it; run `npm --prefix web run build` first if invoking this alone.
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { once } from 'node:events';
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -32,7 +32,7 @@ function findHashedAsset(ext) {
   return `/assets/${hit}`;
 }
 
-const srv = spawn('node', ['server/src/server.js'], {
+const srv = spawnServer({
   cwd: ROOT,
   env: {
     ...process.env,

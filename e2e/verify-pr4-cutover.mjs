@@ -8,7 +8,7 @@
 // PLAYWRIGHT_BROWSERS_PATH. Copies fixtures to /tmp — never touches real data.
 import { chromium } from './playwright.mjs';
 import { currentValue, pickValue, readOptionPairs, readOptionValues } from './pick.mjs';
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -62,7 +62,7 @@ ok('legacy entries still on disk (soak)', yamlText.includes('id: younger') && ya
 
 // --- 2. Boot the harness on the migrated registry ------------------------------ //
 const fake = await startFakeMqtt({ port: FAKE_MQTT_PORT });
-const srv = spawn('node', [`${ROOT}/server/src/server.js`], {
+const srv = spawnServer({
   env: {
     ...process.env,
     QUEUES_PATH: '/tmp/queues-pr4.yaml',

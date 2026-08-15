@@ -2,7 +2,7 @@
 // Boots the same offline stack as shots.mjs, then: (a) zooms the modal ✕ glyph, and (b) drives
 // a real mouse drag on a queue tile and screenshots MID-gesture so the lift/FLIP is visible.
 import { chromium } from './playwright.mjs';
-import { spawn } from 'node:child_process';
+import { spawnServer, REPO_ROOT } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 import { startFakeMqtt } from './fake-mqtt.mjs';
 
@@ -11,7 +11,10 @@ const PORT = 18781;
 const FAKE_MQTT_PORT = 11884;
 const BASE = `http://localhost:${PORT}`;
 const OUT = '__screenshots__';
-const ROOT = '/mnt/TrueNAS-Apps/Repos/plex-channels';
+// THIS checkout — the same anchor every sibling harness uses. It was hardcoded to the
+// pre-rename /mnt/TrueNAS-Apps/Repos/plex-channels clone, which since the TS/Hono conversion
+// would have shot a DIFFERENT repo's fixtures at this repo's server.
+const ROOT = REPO_ROOT;
 
 async function waitReady(url, ms = 30000) {
   const deadline = Date.now() + ms;
@@ -28,7 +31,7 @@ for (const p of ['/tmp/queues-v.yaml.lock', '/tmp/sets-v.yaml.lock', '/tmp/.hist
   await fs.rm(p, { recursive: true, force: true });
 }
 const fake = await startFakeMqtt({ port: FAKE_MQTT_PORT });
-const srv = spawn('node', [`${ROOT}/server/src/server.js`], {
+const srv = spawnServer({
   env: { ...process.env, QUEUES_PATH: '/tmp/queues-v.yaml', SETS_PATH: '/tmp/sets-v.yaml',
     HISTORY_PATH: '/tmp/.history-v.json', WEB_PORT: String(PORT),
     MQTT_HOST: '127.0.0.1', MQTT_PORT: String(FAKE_MQTT_PORT), NODE_TLS_REJECT_UNAUTHORIZED: '0' },

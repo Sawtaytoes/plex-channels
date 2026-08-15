@@ -31,7 +31,9 @@ node e2e/fake-mqtt.mjs &
 BROKER=$!
 sleep 1
 echo "[dev] starting web server on http://localhost:$PORT (fixtures + fake MQTT + real Plex)"
-node server/src/server.js &
+# server/src is TypeScript — run it through tsx (a server/ devDependency; no root manifest).
+[ -d server/node_modules ] || npm --prefix server ci --no-audit --no-fund
+server/node_modules/.bin/tsx server/src/index.ts &
 SRV=$!
 
 trap 'kill $BROKER $SRV 2>/dev/null || true' EXIT INT TERM

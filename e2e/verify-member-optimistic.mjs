@@ -9,7 +9,7 @@
 //   node e2e/verify-member-optimistic.mjs
 import { chromium } from './playwright.mjs';
 import { pickValueMaybe } from './pick.mjs';
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -44,7 +44,7 @@ for (const p of ['/tmp/queues-optm.yaml.lock', '/tmp/sets-optm.yaml.lock', '/tmp
 }
 
 const fake = await startFakeMqtt({ port: FAKE_MQTT_PORT });
-const srv = spawn('node', [`${ROOT}/server/src/server.js`], {
+const srv = spawnServer({
   env: {
     ...process.env,
     QUEUES_PATH: '/tmp/queues-optm.yaml',

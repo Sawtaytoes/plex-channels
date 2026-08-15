@@ -12,7 +12,7 @@
 //   2. When a fake MQTT broker is importable (local sandbox; skipped in CI): seed a RETAINED
 //      now-playing, then a freshly-connected client's `now` frame carries THAT snapshot's
 //      ratingKey — no publish after connect.
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 
 const ok = (n, c) => { console.log(`${c ? 'PASS' : 'FAIL'} ${n}`); if (!c) process.exitCode = 1; };
@@ -59,7 +59,7 @@ function firstNowFrame(text) {
 }
 
 async function startServer(env, port) {
-  const child = spawn('node', ['server/src/server.js'], { env, stdio: 'ignore' });
+  const child = spawnServer({ env, stdio: 'ignore' });
   for (let i = 0; i < 50; i++) {
     try {
       const r = await fetch(`http://localhost:${port}/api/history`);

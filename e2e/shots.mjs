@@ -6,7 +6,7 @@
 // Needs: root agentic .env (Plex token), e2e/broker deps (aedes), mux-magic playwright,
 // PLAYWRIGHT_BROWSERS_PATH. Copies fixtures to /tmp — never touches real data.
 import { chromium } from './playwright.mjs';
-import { spawn } from 'node:child_process';
+import { spawnServer, REPO_ROOT } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 import { startFakeMqtt } from './fake-mqtt.mjs';
 
@@ -15,7 +15,10 @@ const PORT = parseInt(process.env.WEB_PORT || '18780', 10);
 const FAKE_MQTT_PORT = parseInt(process.env.FAKE_MQTT_PORT || '11883', 10);
 const BASE = `http://localhost:${PORT}`;
 const OUT = '__screenshots__';
-const ROOT = '/mnt/TrueNAS-Apps/Repos/plex-channels';
+// THIS checkout — the same anchor every sibling harness uses. It was hardcoded to
+// /mnt/TrueNAS-Apps/Repos/plex-channels (the pre-rename clone), which since the TS/Hono
+// conversion would have shot a DIFFERENT repo's fixtures at this repo's server.
+const ROOT = REPO_ROOT;
 
 async function waitReady(url, ms = 30000) {
   const deadline = Date.now() + ms;
@@ -34,7 +37,7 @@ for (const p of ['/tmp/queues-harness.yaml.lock', '/tmp/sets-harness.yaml.lock',
 }
 
 const fake = await startFakeMqtt({ port: FAKE_MQTT_PORT });
-const srv = spawn('node', [`${ROOT}/server/src/server.js`], {
+const srv = spawnServer({
   env: {
     ...process.env,
     QUEUES_PATH: '/tmp/queues-harness.yaml',

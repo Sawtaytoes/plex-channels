@@ -10,7 +10,7 @@
 // PLAYWRIGHT_BROWSERS_PATH. Copies fixtures to /tmp — never touches real data.
 import { chromium } from './playwright.mjs';
 import { pickValue, pickValueMaybe } from './pick.mjs';
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -50,7 +50,7 @@ for (const p of ['/tmp/queues-pr3ui.yaml.lock', '/tmp/sets-pr3ui.yaml.lock', '/t
 }
 
 const fake = await startFakeMqtt({ port: FAKE_MQTT_PORT });
-const srv = spawn('node', [`${ROOT}/server/src/server.js`], {
+const srv = spawnServer({
   env: {
     ...process.env,
     QUEUES_PATH: '/tmp/queues-pr3ui.yaml',

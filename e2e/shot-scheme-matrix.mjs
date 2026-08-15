@@ -9,7 +9,7 @@
 // fixtures copied to /tmp, exactly like e2e/shots.mjs — nothing real is touched.
 // The scheme is forced via localStorage (`charcuterie-scheme`), the same key
 // `ColorSchemeSwitcher` persists to, so this drives the app's real scheme path.
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +44,7 @@ for (const p of ['/tmp/queues-matrix.yaml.lock', '/tmp/sets-matrix.yaml.lock', '
 }
 
 const fake = await startFakeMqtt({ port: FAKE });
-const srv = spawn('node', [`${ROOT}/server/src/server.js`], {
+const srv = spawnServer({
   env: {
     ...process.env,
     QUEUES_PATH: '/tmp/queues-matrix.yaml',

@@ -1,7 +1,7 @@
 // Undo history survives a server restart (the file-backed stack in history.js).
 // Self-contained: spawns its OWN server on a private port + private temp files — no
 // browser, no MQTT, no Plex (the sets registry serves with Plex down).
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 
 const PORT = 18770;
@@ -24,7 +24,7 @@ for (const f of ['/tmp/queues-hist.yaml', '/tmp/sets-hist.yaml', '/tmp/history-h
 await fs.copyFile(new URL('./fixtures/queues.fixture.yaml', import.meta.url), '/tmp/queues-hist.yaml');
 
 async function startServer() {
-  const child = spawn('node', ['server/src/server.js'], { env, stdio: 'ignore' });
+  const child = spawnServer({ env, stdio: 'ignore' });
   for (let i = 0; i < 50; i++) {
     try { await api('/history'); return child; } catch { await new Promise((r) => setTimeout(r, 200)); }
   }

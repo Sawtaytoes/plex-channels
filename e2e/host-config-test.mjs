@@ -5,6 +5,7 @@
 // middle layer in: env.js/config.js are read in a child process per case, because both
 // modules resolve their values once at import time.
 import { execFileSync } from 'node:child_process';
+import { TSX_BIN } from './stubs/server-process.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -42,9 +43,11 @@ const HOST_KEYS = [
   'SHIELD_CLIENT_MACHINE_ID',
   'SHIELD_CAST_NAME',
 ];
+// tsx, not process.execPath: the child imports server/src/env.js, and bare `node` can neither
+// load env.ts nor map the `.js` specifier onto it. tsx forwards `--input-type=module -e`.
 const resolve = (env) =>
   JSON.parse(
-    execFileSync(process.execPath, ['--input-type=module', '-e', READ], {
+    execFileSync(TSX_BIN, ['--input-type=module', '-e', READ], {
       cwd: import.meta.dirname,
       env: { ...process.env, ...Object.fromEntries(HOST_KEYS.map((k) => [k, ''])), ...env },
       encoding: 'utf8',

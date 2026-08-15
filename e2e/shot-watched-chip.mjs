@@ -2,7 +2,7 @@
 // the trailing "— watched" words became "Watched" chips, so a long run of episode titles
 // can be skimmed. Same offline harness as shot-dropdowns.mjs (fixtures + fake broker +
 // the real Plex for episode lists).
-import { spawn } from 'node:child_process';
+import { spawnServer } from './stubs/server-process.mjs';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,7 +30,7 @@ await fs.copyFile(`${ROOT}/e2e/fixtures/sets.fixture.yaml`, '/tmp/sets-chip.yaml
 for (const p of ['/tmp/sets-chip.yaml.lock', '/tmp/queues-chip.yaml.lock']) await fs.rm(p, { force: true });
 
 const fake = await startFakeMqtt({ port: FAKE });
-const srv = spawn('node', [`${ROOT}/server/src/server.js`], {
+const srv = spawnServer({
   env: {
     ...process.env,
     HISTORY_PATH: '/tmp/.history-chip.json',

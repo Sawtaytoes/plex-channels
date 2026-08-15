@@ -17,6 +17,7 @@ process.env.RESUME_ON_ADVANCE = 'false';
 process.env.ADB_ENABLED = 'false';
 
 import { registerHooks } from 'node:module';
+import { parentIs } from './stubs/module-id.mjs';
 import { stubSessionDeps, useFixtures, resetSession, SESSION_CTL } from './stubs/session-harness.mjs';
 
 const FAILS = [];
@@ -104,10 +105,14 @@ const PLEX_STUB = stub(`
 `);
 const SETS_STUB = stub("export async function getSet() { return { user_uuid: 'yk-uuid' }; }");
 
+// Extension-blind parent match (see e2e/stubs/module-id.mjs): pinned to a literal
+// `playback.js` this hook stopped firing the moment the module became playback.ts, and the
+// test then made REAL requests to the configured Plex server instead of failing.
+const fromPlayback = parentIs('/server/src/playback');
+
 registerHooks({
   resolve(spec, ctx, next) {
-    const parent = ctx && ctx.parentURL ? ctx.parentURL : '';
-    if (/\/server\/src\/playback\.js$/.test(parent)) {
+    if (fromPlayback(ctx)) {
       if (spec === 'undici') return { url: UNDICI, shortCircuit: true };
       if (spec === './plex.js') return { url: PLEX_STUB, shortCircuit: true };
       if (spec === './sets.js') return { url: SETS_STUB, shortCircuit: true };
