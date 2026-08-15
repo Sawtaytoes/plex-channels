@@ -3,6 +3,7 @@ import * as cache from '../cache.js';
 import { toWeight } from '../engine/weight.js';
 import { errMessage } from '../errors.js';
 import * as plex from '../plex.js';
+import * as providerTiles from '../providers/tiles.js';
 import * as queues from '../queues.js';
 import * as sets from '../sets.js';
 import * as tiles from '../tiles.js';
@@ -101,6 +102,25 @@ export function setsRoutes(): Hono {
       let scope = {};
       if (uuidQ) {
         try { scope = { token: await plex.accountToken(uuidQ), account: uuidQ }; } catch { scope = {}; }
+      }
+      // A READING channel's members are its provider's, resolved in one bounded round-trip —
+      // the same seam the queue grid uses, and for the same reason: Plex cannot resolve them.
+      // (A pull channel has no Plex Home profile to scope by, so `scope` does not apply.)
+      if (s.delivery === 'pull') {
+        const values = s.members || [];
+        const cores = await providerTiles.resolveTiles(s, values);
+        return c.json({
+          members: values.map((value, index) => ({
+            index,
+            raw: value,
+            // `cores` is index-aligned with `values` by contract, which is what the `!` says —
+            // `noUncheckedIndexedAccess` is the only reason it is written.
+            ...cores[index]!,
+            start: value && typeof value === 'object' && value.start ? value.start : null,
+            episodes: value && typeof value === 'object' && value.episodes ? value.episodes : 1,
+            weight: toWeight(value && typeof value === 'object' ? value.weight : null),
+          })),
+        });
       }
       const members = await mapLimit(s.members || [], 6, async (value, index) => {
         // A hand-written {collection: <name>} mapping resolves like its string spelling.

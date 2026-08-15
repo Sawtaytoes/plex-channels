@@ -56,6 +56,8 @@ interface PlexBucketsContext {
   token?: string | null;
   kind?: string;
   lastMovieRk?: string | null;
+  /** The one-entry override — see `BucketsContext.only`. Curated-queue branch only. */
+  only?: string | null;
 }
 
 /** The rng seam. A seeded test injects its own object with both members. */
@@ -135,6 +137,9 @@ export function plexProvider({ def = null, client = null }: PlexProviderOptions 
     /** Push, not pull: a card starts the show on a screen that is already on. */
     delivery: 'push',
 
+    /** Episodes — see kavita.js's `unit`. */
+    unit: 'episode',
+
     /**
      * Libraries, for the queue editor's provider block.
      *
@@ -179,10 +184,20 @@ export function plexProvider({ def = null, client = null }: PlexProviderOptions 
      * this seam is what lets Kavita reuse it verbatim.
      */
     async buckets({
-      setName, cfg, binding, token, kind, lastMovieRk = null,
+      setName, cfg, binding, token, kind, lastMovieRk = null, only = null,
     }: PlexBucketsContext): Promise<BucketsResult> {
       if (cfg.source === 'queue') {
-        const entries = resolve.loadEntries(setName);
+        let entries = resolve.loadEntries(setName);
+        // "Play THIS one" (the grid's per-tile ▶). Narrowing the ENTRY LIST — rather than
+        // adding a branch inside nextQueue — is what keeps this honest: the one entry still
+        // goes through the same resolve/watched/batch machinery, so it gets the same next
+        // unwatched episode, the same episodes-per-play count and the same resume offset it
+        // would have got when the queue reached it on its own. A one-entry queue IS the
+        // normal path with a shorter list.
+        if (only) {
+          entries = entries.filter((e) => e.key === only);
+          if (!entries.length) return { play: [], unknownEntry: only };
+        }
         if (cfg.reel) return resolve.buildReel(c, setName, cfg, entries, token);
         const watched = await select.watchedForSet(c, cfg, binding);
         // The rng is REQUIRED, not optional: a channel (kind: anime) plays its members in a

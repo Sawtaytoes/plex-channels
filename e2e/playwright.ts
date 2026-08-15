@@ -131,6 +131,7 @@ export interface Locator {
   isVisible(options?: TimeoutOptions): Promise<boolean>;
   isHidden(options?: TimeoutOptions): Promise<boolean>;
   isChecked(options?: TimeoutOptions): Promise<boolean>;
+  scrollIntoViewIfNeeded(options?: TimeoutOptions): Promise<void>;
   elementHandle(options?: TimeoutOptions): Promise<ElementHandle | null>;
   elementHandles(): Promise<ElementHandle[]>;
   waitFor(options?: WaitForSelectorOptions): Promise<void>;

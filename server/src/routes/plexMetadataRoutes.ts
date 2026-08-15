@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import * as plex from '../plex.js';
 import * as providerBlocks from '../providers/blocks.js';
-import { providerFor } from '../providers/index.js';
+import { coverUrl, providerFor } from '../providers/index.js';
 import * as sets from '../sets.js';
 import { binaryResponse } from './binaryResponse.js';
 
@@ -57,6 +57,10 @@ export function plexMetadataRoutes(): Hono {
               type: 'show',
               librarySectionTitle: r.libraryTitle,
               librarySectionID: r.libraryId,
+              // The dropdown's artwork. It must be sent, not derived: the frontend's only other
+              // move is /api/thumb/<id>, which is PLEX's proxy and answers 502 for a Kavita
+              // seriesId — the broken-image row the owner hit on 2026-08-15.
+              cover: coverUrl(block.provider, r.id),
             })),
           });
         }

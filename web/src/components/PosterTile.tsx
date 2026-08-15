@@ -1,7 +1,7 @@
 import { Skeleton } from "@charcuterie/ui"
 import type { ReactNode } from "react"
 
-import { thumbUrl } from "../lib/api"
+import { Poster } from "./Poster"
 import { Tip } from "./Tip"
 
 /**
@@ -13,6 +13,15 @@ import { Tip } from "./Tip"
  * e2e suites' contract (`li.tile`, `.thumb`, `.poster`, `.check`, `.remove`,
  * `.cap`, `.title`, `.next`, `.badges`) and `data-key` must be stable across
  * re-render, drag and reload.
+ *
+ * `.check` and `.remove` are SIBLINGS of `.thumb`, not children of it. They used to
+ * be absolutely positioned inside the poster, which the poster wall can afford and
+ * the other two densities cannot: on a 40px row thumb a 28px ✕ covers the artwork
+ * entirely, and shrinking it (the old `transform: scale(.75)`) only made it a
+ * smaller thing sitting on top of the art. Out here, `cards`/`rows` can give each
+ * control its own grid column — off the poster, in the card — while `posters` keeps
+ * overlaying them via `position: absolute` on the tile.
+ * (decision `2026-08-15-tile-controls-are-quiet-and-sit-beside-the-poster`)
  */
 
 type Props = {
@@ -20,6 +29,8 @@ type Props = {
   dataSet?: string
   className?: string
   posterRatingKey?: string | null
+  /** A non-Plex entry's server-sent artwork URL (see `Poster`). */
+  posterCover?: string | null
   title: string
   titleTooltip?: string
   next?: {
@@ -31,6 +42,13 @@ type Props = {
   badges?: ReactNode
   /** The multi-select checkbox — queue grid only. */
   onCheck?: () => void
+  /**
+   * Start THIS entry now — the ▶ over the poster, queue/channel grid only. Takes the
+   * button's viewport box because what it opens is the same fixed-position device menu
+   * "Play on ▾" opens; nothing here plays without naming a device.
+   */
+  onPlay?: (anchor: DOMRect) => void
+  playTitle?: string
   /** The × — queue grid and member grid. */
   onRemove?: () => void
   removeTitle?: string
@@ -57,7 +75,10 @@ export function PosterTile({
   next,
   onCheck,
   onContextMenu,
+  onPlay,
   onRemove,
+  playTitle = "Play this now",
+  posterCover,
   posterRatingKey,
   removeTitle = "Remove",
   title,
@@ -73,6 +94,15 @@ export function PosterTile({
       onContextMenu={onContextMenu}
       tabIndex={0}
     >
+      {onCheck ? (
+        <span
+          aria-hidden="true"
+          className="check"
+          onClick={onCheck}
+        >
+          ✓
+        </span>
+      ) : null}
       <div className="thumb">
         {/* `aria-hidden` on Skeleton is the component's contract — the LOAD is
             announced by the owning region's `aria-busy`, never by the placeholder. */}
@@ -83,50 +113,68 @@ export function PosterTile({
             shape="block"
           />
         ) : null}
-        {posterRatingKey ? (
-          <img
-            alt=""
-            className="poster"
-            draggable={false}
-            loading="lazy"
-            src={thumbUrl(posterRatingKey)}
-          />
-        ) : null}
-        {onCheck ? (
-          <span
-            aria-hidden="true"
-            className="check"
-            onClick={onCheck}
-          >
-            ✓
-          </span>
-        ) : null}
-        {onRemove ? (
-          <Tip label={removeTitle}>
+        <Poster
+          className="poster"
+          cover={posterCover}
+          ratingKey={posterRatingKey}
+        />
+        {/* Centred ON the artwork, unlike ✓/✕ — this one is about the thing in the picture,
+            and it is the affordance Plex puts there too, so it is the one place the poster
+            is worth covering. Inside `.thumb` so it centres on the poster in every density
+            without a second set of per-density rules. */}
+        {onPlay ? (
+          <Tip label={playTitle}>
             <button
-              aria-label={removeTitle}
-              className="remove"
-              onClick={onRemove}
+              aria-label={playTitle}
+              className="tileplay"
+              onClick={(e) => {
+                e.stopPropagation()
+                onPlay(
+                  e.currentTarget.getBoundingClientRect(),
+                )
+              }}
               type="button"
             >
               <svg
                 aria-hidden="true"
-                height="12"
-                viewBox="0 0 12 12"
-                width="12"
+                height="14"
+                viewBox="0 0 14 14"
+                width="14"
               >
                 <path
-                  d="M1.5 1.5l9 9M10.5 1.5l-9 9"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeWidth="2"
+                  d="M3 1.5l9 5.5-9 5.5z"
+                  fill="currentColor"
                 />
               </svg>
             </button>
           </Tip>
         ) : null}
       </div>
+      {onRemove ? (
+        <Tip label={removeTitle}>
+          <button
+            aria-label={removeTitle}
+            className="remove"
+            onClick={onRemove}
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              height="12"
+              viewBox="0 0 12 12"
+              width="12"
+            >
+              <path
+                d="M1.5 1.5l9 9M10.5 1.5l-9 9"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="2"
+              />
+            </svg>
+          </button>
+        </Tip>
+      ) : null}
       <div className="cap">
         <Tip label={titleTooltip ?? title}>
           <span className="title">{title}</span>

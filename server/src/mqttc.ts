@@ -27,6 +27,8 @@ interface StartCommand {
   kind: string;
   target?: string;
   profile?: string;
+  /** An entry key — play THAT member of a curated set. Web-only; a card never sends it. */
+  only?: string;
 }
 
 /** A device announcement as it comes back off the retained registry: unvalidated JSON, so
@@ -150,16 +152,20 @@ export const lastNowPlaying = (): NowPlaying | null => LAST_NOW;
 // Publish a session start ("Play on <device>"). target omitted -> the default Shield.
 // `profile` (PR 4) names the binding to play under on a profiles[] function channel —
 // mqttd resolves it via routing.bindingFor; omitted = the default binding.
+// `only` is an entry key: play THAT member of a curated set instead of whatever the set
+// would have chosen. Web-only — no physical card sends it.
 export function play(
   setId: string,
   kind?: string | null,
   target?: string | null,
   profile?: string | null,
+  only?: string | null,
 ): StartCommand {
   if (!connected()) throw new Error('MQTT not connected');
   const payload: StartCommand = { set: setId, kind: kind || 'movie' };
   if (target) payload.target = target;
   if (profile) payload.profile = profile;
+  if (only) payload.only = only;
   // `connected()` just proved client is non-null; it is a module-level `let`, so say so.
   client!.publish(T_CMD_START, JSON.stringify(payload), { qos: 1 });
   return payload;

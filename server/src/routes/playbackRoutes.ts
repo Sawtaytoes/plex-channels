@@ -4,7 +4,7 @@ import * as engineRouting from '../engine/routing.js';
 import { errMessage } from '../errors.js';
 import * as mqttc from '../mqttc.js';
 import * as providerBlocks from '../providers/blocks.js';
-import { providerFor } from '../providers/index.js';
+import { coverUrl, providerFor } from '../providers/index.js';
 import * as sets from '../sets.js';
 import { lastNow, withContext } from '../sse.js';
 import { readBody } from './readBody.js';
@@ -24,21 +24,29 @@ export function playbackRoutes(): Hono {
   // Shield's signed-in profile pick the tier, and kind='movie' on a rotation set plays
   // that tier's Movies channel (weighted rewatch) instead of the shows rotation.
   app.post('/play', async (c) => {
-    const { set: setId, kind: kindReq, target, profile } = await readBody(c);
+    const { set: setId, kind: kindReq, target, profile, only } = await readBody(c);
     const tgt = target ? String(target) : undefined;
     // PR 4: an explicit profile names the binding on a profiles[] function channel (the
     // Play-landing profile selector); the auto path keeps letting the Shield decide.
     const prof = profile ? String(profile) : undefined;
+    // The grid's per-tile ▶: play ONE entry of a curated set. Only a curated set has entries
+    // to name, so asking for one on a rotation channel is a request error rather than a
+    // silently-ignored field — a rotation's pool is a rule, and nothing in it has a key.
+    const entryKey = only ? String(only) : undefined;
     try {
       if (setId === 'auto') {
+        if (entryKey) return c.json({ error: 'set "auto" cannot play a single entry' }, 400);
         return c.json({ sent: mqttc.play('auto', kindReq === 'movie' ? 'movie' : 'cartoons', tgt) });
       }
       const s = await sets.getSet(String(setId || ''));
       if (!s) return c.json({ error: 'unknown set' }, 400);
+      if (entryKey && s.source !== 'queue') {
+        return c.json({ error: `'${s.label || s.id}' is a rule-based channel — it has no entries to play one of` }, 400);
+      }
       const kind = s.source === 'rotation'
         ? (kindReq === 'movie' ? 'movie' : 'cartoons')
         : s.kind === 'anime' ? 'anime' : 'movie';
-      return c.json({ sent: mqttc.play(s.id, kind, tgt, prof) });
+      return c.json({ sent: mqttc.play(s.id, kind, tgt, prof, entryKey) });
     } catch (e) {
       return c.json({ error: errMessage(e) }, 503);
     }
@@ -84,7 +92,16 @@ export function playbackRoutes(): Hono {
           label: s.label,
           provider: block.provider,
           delivery: 'pull',
-          buckets: pool,
+          // `cover` is the one field the Plex shape has no equivalent of: a Plex bucket's
+          // artwork is /api/thumb/<ratingKey>, which the frontend builds from the id it already
+          // has. A provider id needs its provider's proxy instead, so the URL is sent.
+          // `unit` goes with it: the shape is Plex's, and Plex's next-up line counts EPISODES.
+          // A reading bucket's number is a chapter, so the tile must say "Ch 113", not "E113".
+          buckets: pool.map((b) => ({
+            ...b,
+            cover: coverUrl(block.provider, b.ratingKey),
+            unit: p.unit || 'episode',
+          })),
         });
       }
 

@@ -48,17 +48,35 @@ export type EntryType =
   | "collection"
   | null
 
+/** What an entry's next-up line counts: episodes (the default) or a reading queue's chapters. */
+export type EntryUnit = "episode" | "chapter"
+
 /** One resolved entry in a curated queue (`GET /api/queues`). */
 export type QueueItem = {
   key: string
   raw?: string
   resolved: boolean
   ratingKey: string | null
+  /**
+   * A non-Plex entry's artwork URL, sent by the server because it cannot be derived from
+   * the id (`/api/thumb/<ratingKey>` is Plex's proxy). Absent on every Plex entry.
+   */
+  cover?: string | null
+  /**
+   * What this entry is counted in. 'chapter' on a reading queue, absent (= episodes)
+   * everywhere else — it changes the wording of the next-up line, nothing else.
+   */
+  unit?: EntryUnit
   type: EntryType
   title: string
   year: number | null
   childCount: number | null
   nextEp: NextEp | null
+  /**
+   * The next-up lookup FAILED (Plex unreachable / errored), as opposed to coming back
+   * empty. Both leave `nextEp` null, but only the empty one means "all watched".
+   */
+  isNextEpFailed?: boolean
   episodes: number
   /**
    * Per-entry override of the set's `batch_stops_at`: WHERE this entry's batch may stop
@@ -104,11 +122,20 @@ export type ChannelMember = {
   raw?: unknown
   resolved: boolean
   ratingKey: string | null
+  /** A non-Plex member's artwork URL — see `QueueItem["cover"]`. */
+  cover?: string | null
+  /** See `QueueItem["unit"]`. */
+  unit?: EntryUnit
   type: EntryType
   title: string
   year: number | null
   childCount: number | null
   nextEp: NextEp | null
+  /**
+   * The next-up lookup FAILED (Plex unreachable / errored), as opposed to coming back
+   * empty. Both leave `nextEp` null, but only the empty one means "all watched".
+   */
+  isNextEpFailed?: boolean
   start: StartPoint | null
   /** Episodes queued per visit (1 = the channel default). */
   episodes?: number
@@ -265,6 +292,12 @@ export type SearchHit = {
   sectionId: number
   childCount?: number | null
   hasThumb?: boolean
+  /**
+   * A non-Plex result's artwork URL. Sent by `/api/search` for a PULL set, whose results are
+   * its provider's items — `/api/thumb/<ratingKey>` would ask Plex about an id it has never
+   * seen and answer 502.
+   */
+  cover?: string | null
   /** A MOVIE's own watch state (Plex omits `viewCount` at 0, so absent = unwatched). */
   viewCount?: number
   viewOffset?: number
@@ -314,6 +347,10 @@ export type PreviewBucket = {
   ratingKey: string
   show: string
   unwatched: number
+  /** A reading pool's artwork URL — see `QueueItem["cover"]`. */
+  cover?: string | null
+  /** See `QueueItem["unit"]`. */
+  unit?: EntryUnit
   /** Slots per round when this channel is randomized (1 = normal). Comes from the channel's
    * `weights` map; the pool tile edits it back through that map. */
   weight?: number

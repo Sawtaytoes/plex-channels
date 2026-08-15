@@ -44,6 +44,14 @@ export type BatchStop = 'member' | 'season' | null;
 export type Delivery = 'push' | 'pull';
 
 /**
+ * What a provider's lineup is COUNTED in — the provider's own fact, declared on the
+ * provider (see `Provider.unit`) rather than inferred from `kind` above the seam. It is
+ * the wording on a tile's next-up line ("Ch 113" / "All read" vs "E5" / "All watched")
+ * and nothing else. `web/src/lib/types.ts` calls the same union `EntryUnit`.
+ */
+export type MediaUnit = 'episode' | 'chapter';
+
+/**
  * A manual START floor: begin here, WITHOUT marking anything earlier watched.
  *
  * Built by two writers that agree on the shape: `queues.js normalizeStart()` (per-entry,
@@ -540,6 +548,26 @@ export interface ProviderCover {
 }
 
 /**
+ * One row from a provider's `tiles()` — the provider-side answer `providers/tiles.js`
+ * turns into a poster tile. Deliberately NOT a `Tile`: it is the provider's own vocabulary
+ * (its item id, its unread count, its next chapter), and the mapping to tile fields —
+ * including `cover` and `unit`, which only the tile shape has — happens in one place above
+ * the seam. A vanished item resolves to `null` rather than throwing.
+ */
+export interface ProviderTileRow {
+  id: string;
+  /** Optional for the same reason `ProviderSearchHit.title` is asserted: `name` is a remote
+   * field, and a nameless series is a provider-side anomaly, not a shape this invents. */
+  title?: string;
+  libraryId: string;
+  format?: number | null;
+  /** Items left to consume — chapters for Kavita, the "how much is waiting" a tile means. */
+  unreadCount: number;
+  /** The next item to play/read, or null when there is nothing left. */
+  next: KavitaPlayItem | null;
+}
+
+/**
  * One pool entry from a PULL provider's `pool()`. Deliberately the Plex preview bucket
  * shape (`ratingKey`/`show`/`unwatched`/`next`) so the Channels grid needs no second
  * render path — here `ratingKey` is an OPAQUE provider item id (a Kavita seriesId), which
@@ -585,6 +613,12 @@ export interface BucketsResult {
   rewatch?: boolean;
   /** Kavita returns its buckets alongside `play` so the caller can render the pool. */
   buckets?: unknown[];
+  /**
+   * The `only` entry key that named an entry the set no longer holds — set INSTEAD of a
+   * lineup, and only on the one-entry path. session.js branches on it for its own error
+   * sentence ("has no entry X any more"), which is why it is a key rather than a boolean.
+   */
+  unknownEntry?: string;
 }
 
 /** A Plex lineup item, as session.js consumes it. */
@@ -689,6 +723,11 @@ export interface BucketsContext {
   libraries?: string[];
   batch?: number | null;
   limit?: number | null;
+  /**
+   * "Play THIS entry": an ENTRY KEY that narrows a curated set's lineup to one member.
+   * Web-only — no physical card sends it, and only the curated-queue branch reads it.
+   */
+  only?: string | null;
 }
 
 /** Options for `handoff()`. Plex reads all of them; Kavita ignores them entirely. */
@@ -718,6 +757,12 @@ export interface Provider {
   label: string;
   /** Static, not a method — the UI reads it to decide whether "Play on <device>" exists. */
   delivery: Delivery;
+  /**
+   * Static, like `delivery`, and OPTIONAL for the same reason the members below are: every
+   * reader spells it `provider.unit || 'episode'`, so a provider that predates the field
+   * keeps counting in episodes rather than failing to typecheck.
+   */
+  unit?: MediaUnit;
 
   // --- required -------------------------------------------------------------- //
   buckets(ctx: BucketsContext): Promise<BucketsResult>;
@@ -738,6 +783,13 @@ export interface Provider {
   search?(q: string, opts?: { libraries?: string[] }): Promise<ProviderSearchHit[]>;
   cover?(itemId: string): Promise<ProviderCover>;
   pool?(opts: { libraries?: string[]; members?: string[] }): Promise<ProviderPoolBucket[]>;
+  /**
+   * Resolve stored item ids to poster rows, INDEX-ALIGNED with `ids`. Optional and guarded
+   * (`providers/tiles.ts` checks `typeof provider.tiles !== 'function'` and degrades the
+   * whole set to unresolved tiles), because a provider that cannot answer this is a grid
+   * of bare titles, not a 500.
+   */
+  tiles?(ids: Iterable<string>): Promise<(ProviderTileRow | null)[]>;
   /**
    * Optional per the guarded-call-site rule, but note session.js:170 calls it UNGUARDED on
    * the push path — a push provider without it throws at start. Both real providers define
@@ -802,6 +854,12 @@ export interface Tile {
   /** Collections only; null for everything else. */
   childCount: number | null;
   nextEp: NextEp | null;
+  /**
+   * The next-up LOOKUP threw, as opposed to answering "nothing left". A null `nextEp` means
+   * both, and the tile says something different for each ("All watched" vs the neutral
+   * "N in order"), so the failure is carried rather than collapsed into the same null.
+   */
+  isNextEpFailed: boolean;
   /** Mid-playback and unwatched — the exact state the engine resumes from. Per-EPISODE:
    * a movie reads its own viewOffset, a show/collection reads the next-up leaf's. */
   partiallyWatched: boolean;
@@ -941,6 +999,11 @@ export interface SessionStartPayload {
   kind?: string;
   profile?: string;
   target?: string | Device | null;
+  /**
+   * "Play THIS entry" — an entry key from the web grid's per-tile ▶. A physical card never
+   * sends it; it only ever arrives from the UI, via `mqttc.play()`'s 5th argument.
+   */
+  only?: string;
 }
 
 // --- SSE --------------------------------------------------------------------- //

@@ -3,9 +3,13 @@ import { statSync } from 'node:fs';
 import * as cache from '../cache.js';
 import { QUEUES_PATH } from '../config.js';
 import { toWeight } from '../engine/weight.js';
+import * as providerTiles from '../providers/tiles.js';
+import type { ProviderTile } from '../providers/tiles.js';
 import * as queues from '../queues.js';
 import * as sets from '../sets.js';
 import * as tiles from '../tiles.js';
+import type { ResolvedTile } from '../tiles.js';
+import type { QueueEntry, Start } from '../types.js';
 import { mapLimit } from './mapLimit.js';
 import { readBody } from './readBody.js';
 
@@ -17,6 +21,37 @@ function statPair(p: string): string {
   } catch {
     return '0-0';
   }
+}
+
+/** A queue entry's manual start override ({season,episode}); null = automatic next-unwatched. */
+const startOf = (e: QueueEntry): Start | null => (
+  e.value && typeof e.value === 'object' && e.value.start ? e.value.start : null
+);
+
+/**
+ * One resolved queue entry, as the grid reads it: the tile CORE (from whichever resolver
+ * answered — Plex's tiles.ts or the provider's) plus the per-entry knobs, which are stored on
+ * the entry and so are identical whatever resolved it.
+ */
+function queueTile(e: QueueEntry, core: ResolvedTile | ProviderTile) {
+  const v = e.value && typeof e.value === 'object' ? e.value : null;
+  // The entry's `batch_stops_at` override (null = follow the set): WHERE its batch may stop,
+  // as opposed to `episodes` = how long it is.
+  const batchStopsAt = v && v.batch_stops_at ? String(v.batch_stops_at).trim().toLowerCase() : null;
+  return {
+    key: e.key,
+    raw: tiles.displayFor(e.value),
+    ...core,
+    episodes: v && v.episodes ? v.episodes : 1,
+    // How often this entry comes up when the set is randomized (1 = normal; the editor shows
+    // a tag only above 1).
+    weight: toWeight(v ? v.weight : null),
+    batch_stops_at: batchStopsAt === 'member' || batchStopsAt === 'season' ? batchStopsAt : null,
+    start: startOf(e),
+    // A finished-but-kept entry (Python tagged it done); the grid greys it and the
+    // "Remove all completed" button targets these. False for every plain entry.
+    done: Boolean(e.done),
+  };
 }
 
 /**
@@ -104,11 +139,21 @@ export function queuesRoutes(): Hono {
       const all = await queues.listAll();
       const result: Record<string, { label: unknown; kind: unknown; source: unknown; sections: unknown; items: unknown[] }> = {};
       // One flat work list across every set, so the concurrency budget is spent globally.
-      const work: { s: typeof reg.sets[number]; e: NonNullable<ReturnType<typeof all.get>>[number] }[] = [];
+      const work: { s: typeof reg.sets[number]; e: QueueEntry }[] = [];
+      // A PULL set resolves through ITS provider instead — per set, because the provider seam
+      // takes the whole set (one block, one client, one bounded fan-out) rather than one entry
+      // at a time. Without this every reading entry resolves against Plex, which has never
+      // heard of a Kavita seriesId: no poster, no next-up, just the stored title.
+      const pull: { s: typeof reg.sets[number]; entries: QueueEntry[] }[] = [];
       for (const s of reg.sets) {
         result[s.id] = { label: s.label, kind: s.kind, source: s.source, sections: s.sections, items: [] };
         if (s.source !== 'queue') continue;
-        for (const e of all.get(s.id) || []) work.push({ s, e });
+        const entries = all.get(s.id) || [];
+        if (s.delivery === 'pull') {
+          if (entries.length) pull.push({ s, entries });
+          continue;
+        }
+        for (const e of entries) work.push({ s, e });
       }
       const resolvedItems = await mapLimit(work, 8, async ({ s, e }) => {
         // resolveTile surfaces, for a series, the next unwatched episode (queue plays it
@@ -116,35 +161,21 @@ export function queuesRoutes(): Hono {
         // member ("Next: <member>", not an opaque "N in order"). A manual start override on the
         // entry floors the pick — {season,episode} for a show, {series,season,episode} for a
         // collection (which member to begin at plus the floor inside it).
-        const start = e.value && typeof e.value === 'object' && e.value.start ? e.value.start : null;
-        const core = await tiles.resolveTile(s.sections, e.value, start);
-        const episodes = e.value && typeof e.value === 'object' && e.value.episodes ? e.value.episodes : 1;
-        // How often this entry comes up when the set is randomized (1 = normal; the editor shows
-        // a tag only above 1).
-        const weight = toWeight(e.value && typeof e.value === 'object' ? e.value.weight : null);
-        // The entry's `batch_stops_at` override (null = follow the set): WHERE its batch may
-        // stop, as opposed to `episodes` = how long it is.
-        const batchStopsAt = e.value && typeof e.value === 'object' && e.value.batch_stops_at
-          ? String(e.value.batch_stops_at).trim().toLowerCase() : null;
-        return {
-          setId: s.id,
-          tile: {
-            key: e.key,
-            raw: tiles.displayFor(e.value),
-            ...core,
-            episodes,
-            weight,
-            batch_stops_at: batchStopsAt === 'member' || batchStopsAt === 'season' ? batchStopsAt : null,
-            // The manual start override (null = automatic next-unwatched).
-            start,
-            // A finished-but-kept entry (Python tagged it done); the grid greys it and the
-            // "Remove all completed" button targets these. False for every plain entry.
-            done: Boolean(e.done),
-          },
-        };
+        const core = await tiles.resolveTile(s.sections, e.value, startOf(e), {});
+        return { setId: s.id, tile: queueTile(e, core) };
       });
       // Regroup by set, preserving the flat list's order (set-then-entry order).
       for (const { setId, tile } of resolvedItems) result[setId]?.items.push(tile);
+
+      // The pull sets, each in one provider round-trip, all of them concurrently.
+      await Promise.all(pull.map(async ({ s, entries }) => {
+        const cores = await providerTiles.resolveTiles(s, entries.map((e) => e.value));
+        // `?.` only because `noUncheckedIndexedAccess` cannot see that the loop above wrote
+        // this key; upstream indexed it directly and the entry is always there.
+        const row = result[s.id];
+        // `cores` is index-aligned with `entries` by contract, which is what the `!` says.
+        if (row) row.items = entries.map((e, i) => queueTile(e, cores[i]!));
+      }));
 
       return c.json({ sets: result, order: reg.sets.map((s) => s.id) });
     } catch (e) {

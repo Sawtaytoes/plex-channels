@@ -13,13 +13,14 @@ import {
   isPullSet,
   OpenQueueButton,
 } from "../components/OpenQueueButton"
+import { Poster } from "../components/Poster"
 import { PosterTile } from "../components/PosterTile"
 import { SearchDropdown } from "../components/SearchDropdown"
 import { SelectListbox } from "../components/SelectListbox"
 import { Tip } from "../components/Tip"
 import { useFlipList } from "../hooks/useFlipList"
 import { useGridDrag } from "../hooks/useGridDrag"
-import { api, thumbUrl } from "../lib/api"
+import { api } from "../lib/api"
 import { flashTile } from "../lib/flip"
 import { activeSet, isPlayingItem } from "../lib/nowPlaying"
 import {
@@ -353,17 +354,21 @@ export function QueueView({
                 className: "queued",
                 content: (
                   <>
-                    {!isCollection || hit.hasThumb ? (
-                      <img
-                        alt=""
-                        src={thumbUrl(hit.ratingKey)}
-                      />
-                    ) : (
-                      <span
-                        aria-hidden="true"
-                        className="noposter"
-                      />
-                    )}
+                    <Poster
+                      cover={hit.cover}
+                      fallback={
+                        <span
+                          aria-hidden="true"
+                          className="noposter"
+                        />
+                      }
+                      // A collection with no artwork of its own has nothing to ask for.
+                      ratingKey={
+                        isCollection && !hit.hasThumb
+                          ? null
+                          : hit.ratingKey
+                      }
+                    />
                     <span>
                       {hit.title}{" "}
                       <span className="y">
@@ -403,17 +408,21 @@ export function QueueView({
             return {
               content: (
                 <>
-                  {!isCollection || hit.hasThumb ? (
-                    <img
-                      alt=""
-                      src={thumbUrl(hit.ratingKey)}
-                    />
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className="noposter"
-                    />
-                  )}
+                  <Poster
+                    cover={hit.cover}
+                    fallback={
+                      <span
+                        aria-hidden="true"
+                        className="noposter"
+                      />
+                    }
+                    // A collection with no artwork of its own has nothing to ask for.
+                    ratingKey={
+                      isCollection && !hit.hasThumb
+                        ? null
+                        : hit.ratingKey
+                    }
+                  />
                   <span>
                     {hit.title}{" "}
                     {isCollection ? (
@@ -766,7 +775,10 @@ export function QueueView({
             items={[
               { label: "Posters", value: "posters" },
               { label: "Cards", value: "cards" },
-              { label: "Rows", value: "rows" },
+              // "List", not "Rows" — the owner's word for it. The stored value stays
+              // `rows` so every persisted per-queue density (and the `ul.grid.rows`
+              // selectors + e2e reads) keeps working; only the label is the owner's.
+              { label: "List", value: "rows" },
             ]}
             label="View"
             onChange={(v) =>
@@ -827,7 +839,7 @@ export function QueueView({
                       <Badge
                         appearance="outline"
                         className="badge donebadge"
-                        intent="neutral"
+                        intent="success"
                         size="sm"
                       >
                         Completed
@@ -840,7 +852,7 @@ export function QueueView({
                       <Badge
                         appearance="solid"
                         className="badge playingbadge"
-                        intent="success"
+                        intent="info"
                         size="sm"
                       >
                         {now.now?.state === "paused"
@@ -923,7 +935,24 @@ export function QueueView({
                   e.preventDefault()
                   openTileMenu(e.clientX, e.clientY, entry)
                 }}
+                // Only a RESOLVED entry can be played: an unresolved one has no library item
+                // behind it, so the server would reject the start after the device menu had
+                // already asked which TV. No ▶ is a clearer answer than a late error.
+                onPlay={
+                  setId && item.resolved
+                    ? (anchor) =>
+                        openPlayMenu({
+                          anchor,
+                          kind: undefined,
+                          only: item.key,
+                          onlyLabel: face.title,
+                          setId,
+                        })
+                    : undefined
+                }
                 onRemove={() => removeTile(item)}
+                playTitle={`Play “${face.title}” now`}
+                posterCover={item.cover}
                 posterRatingKey={
                   item.resolved ? face.ratingKey : null
                 }

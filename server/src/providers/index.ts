@@ -62,6 +62,19 @@ export function providerFor(
   }
 }
 
+/**
+ * The BROWSER-facing URL for one provider item's cover art.
+ *
+ * Always built here, never by hand and never client-side, because the browser must not be
+ * handed the provider's own image URL: Kavita's wants the API key as a query parameter (the
+ * credential-in-URL hazard docs/kavita-feasibility.md flags), so the app re-serves the bytes
+ * through /api/providers/:id/cover/:itemId and the key stays server-side. The Plex analogue
+ * is /api/thumb/:ratingKey, which the frontend still builds for Plex items.
+ */
+export const coverUrl = (providerId: string, itemId: string | number): string => (
+  `/api/providers/${encodeURIComponent(providerId)}/cover/${encodeURIComponent(itemId)}`
+);
+
 /** Every provider that is both supported and configured, ready to serve a queue. */
 export function availableProviders(): ProviderDefinition[] {
   return definitions().filter((d) => (

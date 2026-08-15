@@ -185,6 +185,14 @@ export function kavitaProvider({ def, apiKey, client = null }: KavitaProviderOpt
     delivery: 'pull',
 
     /**
+     * What this provider's lineup is COUNTED in. Declared here rather than inferred above the
+     * seam, for the same reason `delivery` is: the frontend renders one tile and the words on
+     * it ("Ch 113" / "All read" vs "E5" / "All watched") are the provider's fact, not a branch
+     * on `kind` somewhere up the stack.
+     */
+    unit: 'chapter',
+
+    /**
      * Kavita's per-user identity is the API key itself, not a per-request token: reading
      * lists are per-user (`ownerUserName`), and a list built with a different account's key
      * is INVISIBLE to the reader meant to play it — silently, with an empty reader and no
@@ -247,6 +255,41 @@ export function kavitaProvider({ def, apiKey, client = null }: KavitaProviderOpt
         }
       });
       return rows.filter((r): r is KavitaMemberRow => r != null);
+    },
+
+    /**
+     * Resolve stored QUEUE/MEMBER ids to poster tiles — title, art, and what is next.
+     *
+     * The reading analogue of tiles.js, which resolves every entry through PLEX and therefore
+     * answers "unresolved" for every Kavita id: no poster, no next-up, just the stored title.
+     * That is what the live manga_webtoons channel would have shown for every entry it holds.
+     *
+     * One `series-detail` per id, like pool() and for the same reason — the series row carries
+     * PAGES, never chapters, and a tile says what chapter comes next. Bounded, because this is
+     * someone's self-hosted Kavita. Index-aligned with `ids`; a vanished series resolves to
+     * null rather than throwing, so one deleted entry cannot make a whole queue un-renderable.
+     */
+    async tiles(ids) {
+      return mapLimit([...ids].map(String), PROBE_CONCURRENCY, async (id) => {
+        try {
+          const [s, detail] = await Promise.all([c.series(id), c.seriesDetail(id)]);
+          if (!s) return null;
+          const unread = orderedUnread(detail);
+          return {
+            id: String(s.id ?? id),
+            title: s.name,
+            libraryId: String(s.libraryId ?? ''),
+            format: s.format ?? null,
+            // Chapters left, the same "how much is waiting" the pool tile means.
+            unreadCount: detail?.unreadCount ?? unread.length,
+            // `unread.length` is the guard `noUncheckedIndexedAccess` cannot see — the same
+            // assertion the pool branch below already writes for the same read.
+            next: unread.length ? chapterItem(unread[0] as KavitaChapterDto, Number(id)) : null,
+          };
+        } catch {
+          return null;
+        }
+      });
     },
 
     /**
