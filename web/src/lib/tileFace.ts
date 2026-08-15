@@ -15,6 +15,7 @@ export function seLabel(
   ep: NextEp,
   unit: EntryUnit = "episode",
 ): string {
+  if (unit === "volume") return `Vol ${ep.episode ?? "?"}`
   if (unit === "chapter") return `Ch ${ep.episode ?? "?"}`
 
   const e = `E${ep.episode ?? "?"}`
@@ -165,7 +166,9 @@ export function isSelfTitled(ep: NextEp): boolean {
 
 /** "Nothing left to play" in this entry's own unit — a reading queue is read, not watched. */
 const allWatchedLabel = (unit: EntryUnit) =>
-  unit === "chapter" ? "All read" : "All watched"
+  unit === "chapter" || unit === "volume"
+    ? "All read"
+    : "All watched"
 
 /**
  * What a tile actually SHOWS — poster, title line, episode line. A collection

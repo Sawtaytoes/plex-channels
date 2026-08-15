@@ -49,7 +49,15 @@ export type EntryType =
   | null
 
 /** What an entry's next-up line counts: episodes (the default) or a reading queue's chapters. */
-export type EntryUnit = "episode" | "chapter"
+/**
+ * What one lineup item IS, for wording only. Mirrors the server's `MediaUnit`.
+ *
+ * `volume` is a PER-ITEM refinement of `chapter`: one Kavita library holds volume-based
+ * manga beside chapter-based webtoons, so the provider says "chapter" and an individual
+ * item corrects it. Without it a whole volume renders as "Ch -100000" (Kavita's
+ * no-chapter-subdivision sentinel).
+ */
+export type EntryUnit = "episode" | "chapter" | "volume"
 
 /** One resolved entry in a curated queue (`GET /api/queues`). */
 export type QueueItem = {

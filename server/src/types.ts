@@ -48,8 +48,13 @@ export type Delivery = 'push' | 'pull';
  * provider (see `Provider.unit`) rather than inferred from `kind` above the seam. It is
  * the wording on a tile's next-up line ("Ch 113" / "All read" vs "E5" / "All watched")
  * and nothing else. `web/src/lib/types.ts` calls the same union `EntryUnit`.
+ *
+ * `volume` is a PER-ITEM refinement of `chapter`, not a third provider: one Kavita library
+ * holds volume-based manga beside chapter-based webtoons, so the provider declares `chapter`
+ * and an individual item corrects it. Without it a whole volume renders as "Ch -100000" —
+ * Kavita's no-chapter-subdivision sentinel, printed verbatim.
  */
-export type MediaUnit = 'episode' | 'chapter';
+export type MediaUnit = 'episode' | 'chapter' | 'volume';
 
 /**
  * A manual START floor: begin here, WITHOUT marking anything earlier watched.
@@ -643,6 +648,8 @@ export interface KavitaPlayItem {
   seriesId: number | string;
   title: string;
   number?: number | string;
+  /** `volume` when this item is a whole volume rather than a chapter — see `MediaUnit`. */
+  unit?: MediaUnit;
   pages?: number;
   pagesRead?: number;
   bucket?: string;
@@ -713,6 +720,17 @@ export type HandoffResult = PushResult | PullResult;
 
 /** Context for `buckets()`. The two providers read disjoint subsets of it: Plex uses
  * setName/cfg/binding/token/kind/lastMovieRk, Kavita uses cfg/libraries/batch/limit. */
+/**
+ * One curated entry, reduced to what a PULL provider needs to build a lineup from it.
+ *
+ * `batch` is the entry's own per-visit override; absent means "follow the queue's default".
+ */
+export interface CuratedEntryRef {
+  /** The provider's own item id (a Kavita seriesId), off the entry's `ratingKey`. */
+  id: string;
+  batch?: number | null;
+}
+
 export interface BucketsContext {
   setName?: string;
   cfg?: RoutingSetCfg | Record<string, unknown>;
@@ -721,6 +739,21 @@ export interface BucketsContext {
   kind?: string;
   lastMovieRk?: string | null;
   libraries?: string[];
+  /**
+   * The curated ENTRIES of a `source: queue` set, in stored order.
+   *
+   * When present these ARE the lineup. `libraries` is the pool a set draws from when it has
+   * no entries of its own — which is the RULE-based case, not the curated one. Conflating
+   * the two is what made the live "Manga & Webtoons" reading list hold twelve series off the
+   * library shelf and only one of the ninety-three the owner had actually added.
+   */
+  entries?: CuratedEntryRef[];
+  /**
+   * Shuffle which entries lead this launch. True for a `kind: anime` set — the same rule
+   * `playbackRoutes` uses to tell the engine a curated set plays in random order, and the
+   * one the editor's own copy promises ("members play in random order").
+   */
+  isRandomOrder?: boolean;
   batch?: number | null;
   limit?: number | null;
   /**

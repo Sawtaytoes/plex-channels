@@ -14,9 +14,44 @@ import { Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import * as routing from '../engine/routing.js';
 import { errMessage } from '../errors.js';
-import type { PlexClient } from '../types.js';
+import * as queues from '../queues.js';
+import { splitEntry } from '../queues.js';
+import type { CuratedEntryRef, PlexClient } from '../types.js';
 import { resolveSingle, isMixed } from './blocks.js';
 import { providerFor } from './index.js';
+
+/**
+ * A curated set's entries, reduced to `{ id, batch }` for a pull provider.
+ *
+ * DONE entries are dropped: a consuming queue marks them, and a reading list rebuilt from
+ * them would re-serve what has already been read. A `keep_completed` / reel queue never
+ * marks anything done, so nothing is dropped there and the flag needs no special case here.
+ *
+ * Returns `[]` for a rule-based channel, which is what tells `buckets()` to fall back to the
+ * libraries — see the note on `BucketsContext.entries`.
+ */
+async function curatedEntries(setId: string): Promise<CuratedEntryRef[]> {
+  let rows;
+  try {
+    rows = await queues.listSet(setId);
+  } catch {
+    // A missing/unparseable queues.yaml must not make a launch fail with a stack trace —
+    // no entries reads as "rule-based", which is the pre-existing behaviour.
+    return [];
+  }
+  const out: CuratedEntryRef[] = [];
+  for (const e of rows) {
+    if (e.done) continue;
+    const { ratingKey, extras } = splitEntry(e.value);
+    // A pull provider's items are addressed by the provider's own id, which an entry stores
+    // in `ratingKey`. A title-only entry (no id) cannot be resolved against Kavita at all,
+    // so it is skipped rather than guessed at by name.
+    if (!ratingKey) continue;
+    const batch = Number(extras.episodes);
+    out.push({ id: String(ratingKey), batch: Number.isFinite(batch) && batch > 0 ? batch : null });
+  }
+  return out;
+}
 
 /** What `launchDescriptor()` answers with: either a redirect target or an error + status. */
 export type LaunchDescriptor =
@@ -71,7 +106,18 @@ export async function launchDescriptor(
     };
   }
 
-  const { play } = await provider.buckets({ cfg, libraries: block.libraries });
+  const { play } = await provider.buckets({
+    cfg,
+    libraries: block.libraries,
+    // What the owner actually put in this queue. Without it a curated reading queue plays
+    // the library shelf instead of its own ninety-three entries.
+    entries: await curatedEntries(setId),
+    // Same rule playbackRoutes uses to call a curated set random: `kind: anime` is the
+    // "members play in random order" channel the editor offers.
+    isRandomOrder: cfg.kind === 'anime',
+    // The queue's own per-visit batch, overridable per entry inside buckets().
+    batch: block.batch ?? null,
+  });
   if (!play.length) {
     return { error: `queue '${setId}' has nothing unread left`, status: 409 };
   }
