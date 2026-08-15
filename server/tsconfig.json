@@ -20,6 +20,11 @@
     "noEmit": true,
     "declaration": false,
     "declarationMap": false,
+    // The preset's `rootDir` is relative and, inherited, resolves against the
+    // preset's own directory — `node_modules/@charcuterie/tsconfig/src` — which
+    // makes every file in this package TS6059. Re-anchor it here. `.` and not
+    // `src`, because `migrate-tiers.mts` sits beside `src/`, not inside it.
+    "rootDir": ".",
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
