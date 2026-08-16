@@ -310,6 +310,19 @@ export function publicView(def: ProviderDefinition): ProviderPublicView {
   };
 }
 
+/**
+ * How a queue on this kind STARTS, without instantiating it. `sets.ts` decides a set's
+ * delivery with this.
+ *
+ * Exported because that file had grown its OWN `PULL_KINDS = new Set(['kavita'])` — a second
+ * hand-maintained answer to a question this map already answers, and one that would have
+ * rendered a board-game queue as a push target with a "Play on <device>" button for a
+ * backend that has no devices.
+ */
+export const deliveryForKind = (kind: string | null | undefined): Delivery => (
+  DELIVERY[kind ?? ''] || 'push'
+);
+
 /** One provider's words, without instantiating it. `sets.ts` labels a queue with this. */
 export const vocabularyForKind = (kind: string | null | undefined): ProviderVocabulary => (
   VOCABULARY[kind ?? ''] || DEFAULT_VOCABULARY

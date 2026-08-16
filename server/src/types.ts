@@ -1012,7 +1012,7 @@ export interface Provider {
    * whole set to unresolved tiles), because a provider that cannot answer this is a grid
    * of bare titles, not a 500.
    */
-  tiles?(ids: Iterable<string>): Promise<(ProviderTileRow | null)[]>;
+  tiles?(ids: Iterable<string>, entries?: CuratedEntryRef[]): Promise<(ProviderTileRow | null)[]>;
   /**
    * The "Start from…" picker's list of playable units, grouped the way the
    * modal already consumes (`seasons[].episodes[]`). Optional: a provider that

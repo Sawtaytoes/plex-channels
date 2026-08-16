@@ -26,6 +26,7 @@ import type {
   BoardGamesPlayItem,
   BucketsContext,
   BucketsResult,
+  CuratedEntryRef,
   PlayItem,
   Provider,
   ProviderCover,
@@ -202,14 +203,15 @@ export function boardGamesProvider({ def, token = null, client = null }: BoardGa
      *
      * Index-aligned with `ids`, `null` for a game that has vanished.
      */
-    async tiles(ids: Iterable<string>): Promise<(ProviderTileRow | null)[]> {
+    async tiles(ids: Iterable<string>, entries: CuratedEntryRef[] = []): Promise<(ProviderTileRow | null)[]> {
       const wanted = [...ids].map(String);
+      const byId = new Map(entries.map((e) => [String(e.id), e]));
       return mapLimit(wanted, PROBE_CONCURRENCY, async (id): Promise<ProviderTileRow | null> => {
         try {
-          // No entry context here (tiles are drawn for the whole queue at once), so this is
-          // the game's own state: what it owes by default and what it has been played since
-          // it was queued is resolved on the launch path, not this one.
-          const state = await entryState({ id }, PLAYS_PER_GAME_DEFAULT);
+          // The ENTRY's own context, not just the game's: how many plays it owes and when it
+          // was queued are both properties of the queue entry. Without them a "3 plays" game
+          // draws as "Play 1 of 1" and reads finished after one night.
+          const state = await entryState(byId.get(id) ?? { id }, PLAYS_PER_GAME_DEFAULT);
           if (!state) return null;
           return {
             id: state.gameId,

@@ -14,7 +14,7 @@
 //   unit  — 'chapter', so the tile's next-up line reads "Ch 113" rather than "E113" and a
 //           finished series reads "All read" rather than "All watched".
 import { errMessage } from '../errors.js';
-import type { MediaUnit, NextEp } from '../types.js';
+import type { CuratedEntryRef, MediaUnit, NextEp } from '../types.js';
 import * as blocks from './blocks.js';
 import { coverUrl, providerFor } from './index.js';
 
@@ -53,6 +53,24 @@ export interface ProviderTile {
   viewOffset: number;
   duration: number;
   unit?: MediaUnit;
+}
+
+/**
+ * The per-entry context a provider may need to draw a tile.
+ *
+ * A Kavita tile is a property of the SERIES ("what's unread"), so ids were enough. A board
+ * game's tile is a property of the ENTRY: how many plays it owes and when it was queued
+ * both live in queues.yaml, and without them a "3 plays" entry drew as "Play 1 of 1".
+ */
+function entryRefOf(value: unknown, id: string): CuratedEntryRef {
+  const o = (value && typeof value === 'object' ? value : {}) as { episodes?: unknown; queued_at?: unknown };
+  const batch = Number(o.episodes);
+  const queuedAt = Number(o.queued_at);
+  return {
+    id,
+    batch: Number.isFinite(batch) && batch > 0 ? batch : null,
+    queuedAt: Number.isFinite(queuedAt) && queuedAt > 0 ? queuedAt : null,
+  };
 }
 
 /** The provider item id an entry names, or null for a value that carries none. */
@@ -119,9 +137,12 @@ export async function resolveTiles(
 
   const ids = values.map(idOf);
   const wanted = [...new Set(ids.filter((id): id is string => Boolean(id)))];
+  // Index-aligned with `wanted`: the FIRST entry naming each id wins, which matches the
+  // de-duplication above (a queue cannot hold the same item twice).
+  const refs = wanted.map((id) => entryRefOf(values[ids.indexOf(id)], id));
   let rows = [];
   try {
-    rows = await provider.tiles(wanted);
+    rows = await provider.tiles(wanted, refs);
   } catch (e) {
     console.log(`[providers] tiles for set '${set.id}': ${errMessage(e)}`);
     return values.map(unresolvedTile);
