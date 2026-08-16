@@ -292,6 +292,15 @@ export interface NewContextOptions {
   reducedMotion?: 'reduce' | 'no-preference';
   locale?: string;
   storageState?: unknown;
+  /**
+   * Real phone emulation, which a narrow `viewport` alone is NOT. Only with `isMobile`
+   * does Chromium honour `<meta name="viewport">` and widen the LAYOUT viewport when
+   * content overflows — the behaviour that pushed every fixed overlay off the right edge
+   * of the screen in the 2026-08-16 report while `scrollWidth === clientWidth` still
+   * agreed the page was fine. `narrow-scroll-test` needs it; nothing else does yet.
+   */
+  isMobile?: boolean;
+  hasTouch?: boolean;
 }
 
 export interface Browser {
