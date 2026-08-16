@@ -45,9 +45,17 @@ export const EPISODES_MAX = 40
 
 export { PLEX_WORDS } from "../lib/vocab"
 
-/** "3 eps" / "3 ch" — the tag has to fit on a poster tile, so the unit is abbreviated. */
+/**
+ * "3 eps" / "3 ch" / "3 plays" — the tag has to fit on a poster tile, so the unit is
+ * abbreviated.
+ *
+ * This USED to be `vocab.unit === "episode" ? "eps" : "ch"`, which quietly tagged a board
+ * game "3 ch": a binary over a map that already had three entries. The abbreviation is the
+ * provider's own word now (`ProviderVocabulary.unitShort`), so a fourth medium adds one map
+ * entry and no component edit — which is what the vocabulary ADR promised.
+ */
 const shortUnits = (vocab: ProviderVocabulary) =>
-  vocab.unit === "episode" ? "eps" : "ch"
+  vocab.unitShort || PLEX_WORDS.unitShort || "eps"
 
 /** The tags for one entry: only what differs from the defaults, in a stable order. */
 export function SettingTags({

@@ -158,6 +158,9 @@ export async function resolveTiles(
           // Chapters have no season, and `multiSeason: false` is what drops the "S1" that a
           // chapter must never wear.
           episode: Number(next.number) || null,
+          // "Play 2 of 3". Only a finite per-entry batch has a total to count towards, so
+          // this is absent for every episode and every chapter.
+          of: 'of' in next ? next.of ?? null : null,
           season: null,
           multiSeason: false,
         }
@@ -165,7 +168,9 @@ export async function resolveTiles(
       // A part-read chapter is the reading analogue of a Plex viewOffset, and the badge it
       // drives says so. `viewOffset`/`duration` stay 0: they are MILLISECONDS, and pages are
       // not a runtime — the badge's tooltip correctly says nothing rather than "0:00 of 0:00".
-      partiallyWatched: Boolean(next && (next.pagesRead ?? 0) > 0),
+      // Pages read is Kavita's alone: a play is atomic — it happened or it did not — so a
+      // board game is never "partially" anything.
+      partiallyWatched: Boolean(next && 'pagesRead' in next && (next.pagesRead ?? 0) > 0),
       viewOffset: 0,
       duration: 0,
     };
