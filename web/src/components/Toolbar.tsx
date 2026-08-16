@@ -244,7 +244,7 @@ export function Toolbar() {
           }}
         >
           <label className="addpos">
-            Add to
+            <span className="addlbl">Add to</span>
             {/* No `key`: `addPosition` is this toolbar's own `useState` and nothing
                 else writes it, so the DOM and React have one owner between them.
                 Keying it would remount the control on the user's own pick and take

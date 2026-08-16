@@ -522,7 +522,7 @@ export function QueueView({
           }}
         >
           <label className="addpos">
-            Type
+            <span className="addlbl">Type</span>
             <SelectListbox
               id="searchtype"
               label="Result type"
@@ -540,7 +540,7 @@ export function QueueView({
             />
           </label>
           <label className="addpos">
-            Library
+            <span className="addlbl">Library</span>
             <SelectListbox
               id="searchlib"
               label="Library"
@@ -553,7 +553,7 @@ export function QueueView({
             />
           </label>
           <label className="addpos">
-            Year
+            <span className="addlbl">Year</span>
             <SelectListbox
               id="searchyear"
               label="Release year"
@@ -569,7 +569,7 @@ export function QueueView({
             />
           </label>
           <label className="addpos">
-            State
+            <span className="addlbl">State</span>
             <SelectListbox
               id="searchstate"
               label="Watch state"
@@ -604,7 +604,7 @@ export function QueueView({
             />
           </div>
           <label className="addpos">
-            Add to
+            <span className="addlbl">Add to</span>
             <SelectListbox
               id="addpos"
               label="Add to"
