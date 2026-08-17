@@ -2956,7 +2956,80 @@ ul.grid.posters .tile .badges .epstag {
   padding: 5px 8px;
 }
 
-/* ---- The per-entry settings panel ---- */
+/* ---- The per-entry sheet ----
+
+   A tap on a poster opens this panel, so it has to answer "which one is this, and can
+   I just play it?" before it asks about weights and batch stops. The head is artwork +
+   what plays next + the two actions that do something to the world; the fields below
+   are the settings it has always had.
+   (decision `2026-08-17-a-poster-tap-opens-the-entry-sheet`) */
+#entrymodal .entryhead {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+/* Bigger than any tile's thumb — being able to actually SEE the artwork is half of why
+   the owner picked "tap opens the entry" over "tap plays it". No `height`, so a 2:3
+   poster and a 16:9 still each keep their own shape. */
+#entrymodal .entryart {
+  flex: 0 0 auto;
+  width: 128px;
+  border-radius: 8px;
+  background: var(--color-surface-sunken);
+}
+/* `min-width: 0` + `overflow-wrap` or a long unbroken episode title sets this flex item's
+   floor and pushes the artwork out of the box — the same rule the play rows learned. */
+#entrymodal .entrynext {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--color-content-primary);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+#entrymodal .entrynext.done {
+  color: var(--color-content-muted);
+}
+/* A one-off movie has no next-up line. Collapse it rather than leaving a blank column
+   beside the artwork. */
+#entrymodal .entrynext:empty {
+  display: none;
+}
+#entrymodal .entryactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+/* Full-size targets, deliberately. The whole reason the poster opens this sheet instead
+   of playing is that the tile's 26px ▶ was fiddly, so a play button here that repeated
+   the mistake would defeat the change. */
+#entrymodal .entryactions > .primary {
+  background: var(--color-intent-accent-solid);
+  border: none;
+  border-radius: 9px;
+  color: var(--color-intent-accent-on-solid);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+#entrymodal .entryactions > .danger {
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  border-radius: 9px;
+  color: var(--color-intent-danger-content);
+  cursor: pointer;
+  font: inherit;
+  padding: 9px 14px;
+}
+#entrymodal .entryactions > .danger:hover {
+  border-color: var(--color-intent-danger-border);
+}
+
 #entrymodal .entryfields {
   display: grid;
   gap: 16px;

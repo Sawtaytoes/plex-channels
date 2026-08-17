@@ -189,7 +189,14 @@ export function QueueView({
   const vocab = regSet?.vocabulary ?? PLEX_WORDS
   const verb = vocab.verb
 
-  useGridDrag(gridRef, setId, Boolean(isChannel))
+  // The fourth argument is the poster tap: with no selection running, tapping a poster
+  // opens that entry's sheet. See the hook for why the gesture is resolved there.
+  useGridDrag(
+    gridRef,
+    setId,
+    Boolean(isChannel),
+    openEntryEditor,
+  )
 
   // A CHANNEL's members play in random order, so the grid lists them
   // alphabetically for lookup; a queue keeps its hand order (top plays next).
