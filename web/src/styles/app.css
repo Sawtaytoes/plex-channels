@@ -409,8 +409,15 @@ h3 {
   font-weight: 600;
 }
 
-input[type="checkbox"],
-input[type="radio"] {
+/* `:not(.peer)` is the whole point of this scope. The reset exists to undo Tailwind
+   preflight for a checkbox the APP renders itself; Charcuterie's `Checkbox` sets
+   `appearance: none` deliberately and paints its own box, and this file is unlayered so
+   `appearance: auto` here beat the component's utility and put the NATIVE box back —
+   measured `appearance: auto` on `#ch-ratings input` with the styled box underneath it,
+   which is why the filter panel's ticks were browser-blue rather than the accent after
+   the groups adopted the component. `.peer` is the class only that input wears. */
+input[type="checkbox"]:not(.peer),
+input[type="radio"]:not(.peer) {
   appearance: auto;
   background-color: revert;
   border: revert;
@@ -1741,10 +1748,12 @@ body.queue-view #tools {
   grid-template-columns: 1fr 1fr;
   gap: 4px 10px;
 }
+/* Type SIZE only, which is this panel's own density call. The box, the gap and the
+   alignment belong to `Checkbox` now — `align-items: baseline` floated the box off its
+   own text, and re-declaring `display`/`gap` is a second copy of the component's layout.
+   Adopting a component means letting it own its own look, which this file already says
+   about `Select`. */
 #chfilters .libs label {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
   font-size: 0.88rem;
 }
 #ch-block {
@@ -2026,16 +2035,10 @@ a.playbtn {
   white-space: nowrap;
 }
 #setmodal .libs label {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
   color: var(--color-content-primary);
   font-size: 0.92rem;
 }
 #dynmodal .libs label {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
   color: var(--color-content-primary);
   font-size: 0.9rem;
 }
