@@ -30,3 +30,4 @@ __corpus__/
 
 # playwright-mcp scratch (console logs, page snapshots)
 .playwright-mcp/
+

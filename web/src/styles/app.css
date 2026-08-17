@@ -2206,6 +2206,81 @@ html.modal-open {
 #channels:not([hidden]) {
   display: block;
 }
+/* WHO IS WATCHING — the group chips, and the provider filter under them.
+
+   Spans the whole grid: `#play` is a 3-column auto-fit grid of the play groups, and this bar
+   is a header for all of them, not a fourth column. `1 / -1` is what says that; without it
+   the bar becomes a column and the groups reflow around it. */
+.groupbar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 0 0 4px;
+}
+.groupchips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* The provider row is a second, quieter group on the same line where there is room, and
+   drops under the groups when there is not. `margin-left: auto` rather than a fixed
+   position so it hugs the right edge on a wide viewport and simply wraps on a narrow one. */
+.providerchips {
+  margin-left: auto;
+}
+.groupchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 999px;
+  background: var(--color-surface-raised);
+  color: var(--color-content-secondary);
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+.groupchip:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-content-primary);
+}
+/* The SELECTED chip is `aria-current="page"`, not a class. The attribute is the fact — this
+   is the page you are on — and styling the fact keeps the two from drifting apart, which is
+   how a selected-looking chip that is not actually current gets shipped. */
+.groupchip[aria-current="page"] {
+  border-color: var(--color-intent-accent-border);
+  background: var(--color-intent-accent-surface);
+  color: var(--color-intent-accent-content);
+}
+/* A count of zero is still shown: "Kavita: 0" is the answer to "where did my stuff go", and
+   hiding it turns a filtered-to-nothing group into an unexplained empty page. */
+.groupcount {
+  min-width: 1.35em;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-surface-sunken);
+  color: var(--color-content-tertiary);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.groupchip[aria-current="page"] .groupcount {
+  background: var(--color-surface-raised);
+  color: var(--color-content-secondary);
+}
+
 .playgroup {
   min-width: 0;
   margin: 0 0 10px;
@@ -2562,6 +2637,12 @@ header h1 input {
     grid-template-columns: 1fr;
     gap: 18px;
   } /* one column in the Narrow View */
+  /* The provider row stops hugging the right edge and takes its own line — at this width
+     `margin-left: auto` would leave one chip stranded across the page from the others. */
+  .providerchips {
+    margin-left: 0;
+    width: 100%;
+  }
   .playrow {
     flex-wrap: wrap;
   }
