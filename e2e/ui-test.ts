@@ -60,7 +60,12 @@ await page.keyboard.press('Escape');
 // 4. Create a queue that includes Shorts via the modal.
 await page.click('#newqueue');
 await page.fill('#set-label', 'Bob — Shorts');
-await page.check('#set-libs input[value="15"]');
+// `#setmodal .libs`, not `#set-libs`. That id stopped existing when the libraries picker
+// moved inside `ProviderBlock` (a queue holds N sources, and N elements cannot share one
+// id), so this line had been CRASHING the whole suite on every run since — taking the ~30
+// assertions below it with it. One source is the only shape this suite creates, so there
+// is exactly one `.libs` here.
+await page.check('#setmodal .libs input[value="15"]');
 await page.click('#set-save');
 await page.waitForFunction(() => [...document.querySelectorAll('.shelf .lbl')].some((e) => e.textContent === 'Bob — Shorts'), undefined, { timeout: 20000 });
 ok('new queue shelf appears', true);
@@ -200,7 +205,12 @@ await page.waitForSelector('[data-testid="chchannel"]', { state: 'attached', tim
 const chanOpts = await readOptions(page, '[data-testid="chchannel"]');
 ok('F: channel picker lists dynamic-then-curated (flat)',
   chanOpts[0] === 'Shows & Shorts' && chanOpts[1] === 'Movies' && chanOpts.length >= 3);
-// Noun fix: open a curated (anime) channel's grid → its add box says "channel", not "queue".
+// Noun: open a curated POOL's grid → its add box says "pool", not "queue".
+//
+// This assertion asked for "channel" until 2026-08-17, which the app stopped saying when
+// the 2026-08-16 Pools rename landed ("Add — search this pool's libraries…"). It had been
+// unreachable rather than passing: the `#set-libs` check above it crashed the whole suite
+// on every run, so nothing here executed. Fixing that selector exposed this one.
 const animeId = cur.length ? await page.evaluate((label) =>
   fetch('/api/queues').then((r) => r.json()).then((j: QueuesResponse) => Object.keys(j.sets).find((id) => j.sets[id]?.label === label)),
 cur[0]) : null;
@@ -208,9 +218,9 @@ if (animeId) {
   await page.goto(`${BASE}/q/${animeId}`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#queue:not([hidden])', { timeout: 20000 });
   const ph = await page.$eval<string, HTMLInputElement>('#search', (e) => e.placeholder);
-  ok('F: curated-channel add box says "channel" not "queue"', /channel/.test(ph) && !/queue/.test(ph));
+  ok(`F: curated-pool add box says "pool" not "queue" (${ph})`, /pool/.test(ph) && !/queue/.test(ph));
 } else {
-  ok('F: curated-channel add box says "channel" not "queue"', true); // no anime set in fixture
+  ok('F: curated-pool add box says "pool" not "queue"', true); // no anime set in fixture
 }
 
 // H. The Movies channel pool uses an eye badge, never the old "Seen N×" (× reads as delete).

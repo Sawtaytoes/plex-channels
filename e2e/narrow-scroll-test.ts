@@ -16,7 +16,7 @@
 // typecheck and the build. Only a measured scrollWidth catches them, so: measure it.
 //
 // Reported again 2026-08-16, and the reason this suite did not catch it: it only ever
-// visited `#/`. The landing route was clean while `#/queues` measured 485px in a 390px
+// visited `/`. The landing route was clean while `/queues` measured 485px in a 390px
 // viewport, because `.gsearch-wrap` was an unwrapped flex row. The consequence was not a
 // sideways scroll anyone would describe as one — Chrome widens the LAYOUT viewport
 // to the overflowing content, so every `position: fixed` overlay then centres itself on
@@ -167,25 +167,27 @@ for (const width of WIDTHS) {
   }
 
   // 5. EVERY route, not just the landing one. This is the check that was missing on
-  //    2026-08-16: `#/` was clean and `#/queues` was 95px over.
+  //    2026-08-16: `/` was clean and `/queues` was 95px over.
   //
   //    The queue id is read from the rendered landing rather than hard-coded, so this
   //    suite keeps working against whatever `queues.fixture.yaml` holds. A route that
   //    yields no id is SKIPPED loudly rather than silently passing.
   const queueId = await page.evaluate(() => {
-    const link = document.querySelector<HTMLAnchorElement>('.playrow a[href*="#/q/"]');
-    return link?.getAttribute('href')?.replace(/^.*#\/q\//, '') ?? null;
+    const link = document.querySelector<HTMLAnchorElement>('.playrow a[href^="/q/"]');
+    return link?.getAttribute('href')?.replace(/^\/q\//, '') ?? null;
   });
   ok(`${width}px: found a queue id on the landing to visit`, Boolean(queueId));
 
   const routes = [
-    ['#/queues', '.playrow, #newqueue, .shelf'],
-    ['#/channels/shows', '#chbody'],
-    ...(queueId ? [[`#/q/${queueId}`, '#queue:not([hidden]) .add']] : []),
+    ['/queues', '.playrow, #newqueue, .shelf'],
+    ['/channels/shows', '#chbody'],
+    ...(queueId ? [[`/q/${queueId}`, '#queue:not([hidden]) .add']] : []),
   ] as const;
 
   for (const [hash, ready] of routes) {
-    await page.evaluate((h) => { location.hash = h; }, hash);
+    // `goto`, not a `location.hash` write: routing is react-router PATHS since
+    // 2026-08-16, so there is no hash left to poke and the server has an SPA fallback.
+    await page.goto(`http://localhost:${PORT}${hash}`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector(ready, { timeout: 30000 }).catch(() => {});
     await page.waitForTimeout(500); // the view swap + the header's ResizeObserver
 
@@ -204,14 +206,14 @@ for (const width of WIDTHS) {
   //    measurement above — `position: fixed` boxes are excluded from `scrollWidth` by
   //    definition, which is exactly why they get to be wrong on their own.
   const modals = [
-    ['#/queues', '#newqueue', 'setmodal', 'New queue'],
-    ['#/channels/shows', '#newcurated', 'setmodal', 'New curated channel'],
-    ['#/channels/shows', '#chconfigure', 'dynmodal', 'Configure a dynamic channel'],
+    ['/queues', '#newqueue', 'setmodal', 'New queue'],
+    ['/channels/shows', '#newcurated', 'setmodal', 'New curated pool'],
+    ['/channels/shows', '#chconfigure', 'dynmodal', 'Configure a filtered pool'],
   ] as const;
 
   for (const [hash, trigger, boxId, label] of modals) {
-    await page.evaluate((h) => { location.hash = h; }, hash);
-    await page.waitForTimeout(500);
+    await page.goto(`http://localhost:${PORT}${hash}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(700);
     const isTriggerThere = await page.$(trigger);
     ok(`${width}px: ${label} — its trigger (${trigger}) exists`, Boolean(isTriggerThere));
     if (!isTriggerThere) continue;
@@ -270,9 +272,9 @@ for (const width of WIDTHS) {
   await page.waitForSelector('.playrow', { timeout: 30000 });
   await page.waitForTimeout(400);
 
-  for (const hash of ['#/', '#/queues', '#/channels/shows'] as const) {
-    await page.evaluate((h) => { location.hash = h; }, hash);
-    await page.waitForTimeout(600);
+  for (const hash of ['/', '/queues', '/channels/shows'] as const) {
+    await page.goto(`http://localhost:${PORT}${hash}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(700);
 
     // `window.innerWidth`, NOT `documentElement.clientWidth`. Only the first one moves:
     // when the page overflowed, `innerWidth` went to 485 in a 390px screen while
@@ -287,8 +289,8 @@ for (const width of WIDTHS) {
   }
 
   // And the modal that the widened viewport actually displaced.
-  await page.evaluate(() => { location.hash = '#/queues'; });
-  await page.waitForTimeout(600);
+  await page.goto(`http://localhost:${PORT}/queues`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(700);
   await page.click('#newqueue');
   await page.waitForSelector('#setmodal', { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(400);
