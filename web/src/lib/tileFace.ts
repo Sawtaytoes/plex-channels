@@ -175,7 +175,8 @@ export function isSelfTitled(
   // Board Game Picker has always had the same shape ("Play 2 of 3 · Wingspan").
   const own = String(ownTitle ?? "").trim()
 
-  if (own && own.toLowerCase() === title.toLowerCase()) return true
+  if (own && own.toLowerCase() === title.toLowerCase())
+    return true
 
   const number = String(ep.episode ?? "")
 
@@ -224,9 +225,8 @@ const allWatchedLabel = (unit: EntryUnit) => {
  * game is too. The useful thing to say is the STATE, which is the same thing the finished
  * tile says, pointing the other way.
  */
-const notYetLabel = (unit: EntryUnit) => (
+const notYetLabel = (unit: EntryUnit) =>
   unit === "play" ? "Not played yet" : ""
-)
 
 /**
  * What a tile actually SHOWS — poster, title line, episode line. A collection
@@ -253,7 +253,8 @@ export function tileFace(item: TileEntry): TileFace {
       // A single-unit entry has nothing to count, so it reports its state instead. Only
       // `play` has such a label — an episode or a chapter always sits somewhere in a run,
       // so "E1" still says which one.
-      const only = Number(n.of) === 1 ? notYetLabel(unit) : ""
+      const only =
+        Number(n.of) === 1 ? notYetLabel(unit) : ""
       const label = only || seLabel(n, unit)
 
       base.next =

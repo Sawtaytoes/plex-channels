@@ -81,7 +81,10 @@ function Shelf({
   providerKind: string
   /** The registry row, for HOW this queue starts and what its provider calls that. Null
    *  while the registry is still loading, which reads as push — the pre-existing default. */
-  set: Pick<RegistrySet, "id" | "delivery" | "vocabulary"> | null
+  set: Pick<
+    RegistrySet,
+    "id" | "delivery" | "vocabulary"
+  > | null
 }) {
   const stripRef = useRef<HTMLUListElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -171,7 +174,7 @@ function Shelf({
             : "Playing"}
         </span>
         <span className="shelfspacer" />
-{/* HOW this queue starts, never WHICH provider it is — the same rule
+        {/* HOW this queue starts, never WHICH provider it is — the same rule
             `OpenQueueButton` follows on the queue's own page. This shelf used to open the
             device menu unconditionally, so a pull queue offered a Shield and a phone for
             something none of them can open; with no broker it simply answered "MQTT not
@@ -191,7 +194,8 @@ function Shelf({
               // same reason `OpenQueueButton` does it.
               target="_blank"
             >
-              {set?.vocabulary?.startIcon || PLEX_WORDS.startIcon}
+              {set?.vocabulary?.startIcon ||
+                PLEX_WORDS.startIcon}
             </a>
           </Tip>
         ) : (
@@ -432,7 +436,8 @@ export function QueuesView({
                       ?.provider_kind ?? ""
                   }
                   set={
-                    reg?.sets.find((s) => s.id === id) ?? null
+                    reg?.sets.find((s) => s.id === id) ??
+                    null
                   }
                   setId={id}
                 />
