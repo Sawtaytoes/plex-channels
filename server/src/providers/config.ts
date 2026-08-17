@@ -67,13 +67,13 @@ export interface SecretWriteResult {
 
 // The kinds this build knows how to instantiate. A definition naming anything else is kept
 // (so a newer config on an older image is not silently dropped) but reports unsupported.
-export const KINDS = ['plex', 'kavita', 'board-game-picker'];
+export const KINDS = ['plex', 'kavita', 'board-games'];
 
 // Push a lineup at a device, or return a URL to open. Kavita is `pull` because it has no
 // cast and no webhooks at all — see docs/kavita-feasibility.md §4. This mirrors each
 // provider's own `delivery`, kept here too so the API can report it without instantiating
 // (and therefore without needing a token for an unconfigured provider).
-const DELIVERY: Record<string, Delivery | undefined> = { plex: 'push', kavita: 'pull', 'board-game-picker': 'pull' };
+const DELIVERY: Record<string, Delivery | undefined> = { plex: 'push', kavita: 'pull', 'board-games': 'pull' };
 
 // The WORDS each medium is described in. Kept beside DELIVERY and for the same reason: the
 // API must be able to report it without instantiating a provider, so an UNCONFIGURED backend
@@ -84,11 +84,17 @@ const DELIVERY: Record<string, Delivery | undefined> = { plex: 'push', kavita: '
 // "Play “The Sword-Eating Swordmaster” now" (reported live, 2026-08-15). Delivery is HOW a
 // lineup starts; this is what the medium is CALLED, and they are not the same question.
 const VOCABULARY: Record<string, ProviderVocabulary | undefined> = {
-  plex: { verb: 'Play', unit: 'episode', units: 'episodes', member: 'show', done: 'watched', name: 'Plex', unitShort: 'eps' },
-  kavita: { verb: 'Read', unit: 'chapter', units: 'chapters', member: 'series', done: 'read', name: 'Kavita', unitShort: 'ch' },
-  'board-game-picker': {
+  plex: {
+    verb: 'Play', unit: 'episode', units: 'episodes', member: 'show', done: 'watched', name: 'Plex',
+    unitShort: 'eps', startIcon: '▶',
+  },
+  kavita: {
+    verb: 'Read', unit: 'chapter', units: 'chapters', member: 'series', done: 'read', name: 'Kavita',
+    unitShort: 'ch', startIcon: '📖',
+  },
+  'board-games': {
     verb: 'Play', unit: 'play', units: 'plays', member: 'game', done: 'played', name: 'Board Game Picker',
-    unitShort: 'plays',
+    unitShort: 'plays', startIcon: '🎲',
   },
 };
 
@@ -100,6 +106,7 @@ const VOCABULARY: Record<string, ProviderVocabulary | undefined> = {
  */
 const DEFAULT_VOCABULARY: ProviderVocabulary = {
   verb: 'Play', unit: 'episode', units: 'episodes', member: 'show', done: 'watched', name: 'Plex', unitShort: 'eps',
+  startIcon: '▶',
 };
 
 // Built-in deploy-time env names, per kind. These keep working exactly as they did before
@@ -109,7 +116,7 @@ const ENV_TOKEN_KEYS: Record<string, string[] | undefined> = {
   plex: ['PLEX_TOKEN', 'PLEX_API_KEY'],
   kavita: ['KAVITA_API_KEY'],
   // Optional on purpose — see KINDS_CONFIGURED_BY_URL below.
-  'board-game-picker': ['BOARD_GAME_PICKER_API_TOKEN'],
+  'board-games': ['BOARD_GAME_PICKER_API_TOKEN'],
 };
 
 // A provider added from the couch has no deploy-time env name, so it gets a generic one.
@@ -167,7 +174,7 @@ function implicitDefinitions(): ProviderDefinition[] {
   if (KAVITA_URL) out.push({ id: 'kavita', kind: 'kavita', label: 'Kavita', base_url: KAVITA_URL });
   // Same rule for the picker: no URL, no permanently-unconfigured provider in the UI.
   if (BOARD_GAME_PICKER_URL) {
-    out.push({ id: 'board-game-picker', kind: 'board-game-picker', label: 'Board Game Picker', base_url: BOARD_GAME_PICKER_URL });
+    out.push({ id: 'board-games', kind: 'board-games', label: 'Board Game Picker', base_url: BOARD_GAME_PICKER_URL });
   }
   return out;
 }
@@ -244,7 +251,7 @@ export function requireToken(id: string, kind: string | null = null): string {
  * Kavita keep failing loudly on a missing token, which is the behaviour two production
  * outages bought us — see this file's header.
  */
-const KINDS_CONFIGURED_BY_URL = new Set(['board-game-picker']);
+const KINDS_CONFIGURED_BY_URL = new Set(['board-games']);
 
 export const isConfigured = (id: string, kind: string | null = null): boolean => (
   KINDS_CONFIGURED_BY_URL.has(kind ?? '')
