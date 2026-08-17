@@ -28,9 +28,9 @@ import { SelectListbox } from "./SelectListbox"
  * that result's section — and **the results stay open after an add**, so several
  * titles can fan out to different queues in one go.
  *
- * `#tools` is a single element the app re-parents between `#gslot-desktop` (the
- * sticky header) and `#gslot-mobile` (the top of the Home content) at 760px,
- * because the header is far too tight on a phone. `ui-test` asserts the physical
+ * `#tools` is a single element the app re-parents between `#gslot-wide` (the
+ * sticky header) and `#gslot-narrow` (the top of the Home content) at 760px,
+ * because the header is far too tight in the Narrow View. `ui-test` asserts the physical
  * parent, so this must render inside the slot rather than merely look like it does.
  */
 export function Toolbar() {

@@ -47,7 +47,7 @@ ok('three queue shelves (no filtered pools, no anime curated pools)',
   shelves.length === 3 && !shelves.includes('younger') && !shelves.includes('bob_anime'));
 
 // 2. Toolbar mounted in header on desktop.
-ok('tools in header (desktop)', await page.$eval('#gslot-desktop #tools', () => true).catch(() => false));
+ok('tools in header (Wide View)', await page.$eval('#gslot-wide #tools', () => true).catch(() => false));
 
 // 3. Global search finds a Short; no compatible queue yet → notice.
 await page.fill('#gsearch', 'toy tinkers');
@@ -143,10 +143,10 @@ await page.click('#set-delete');
 await page.waitForFunction(() => !document.querySelector('.shelf[data-set="bob_shorts"]'), undefined, { timeout: 20000 });
 ok('delete removes shelf', true);
 
-// 12. Mobile: toolbar re-mounts into content.
+// 12. Narrow View: toolbar re-mounts into content.
 await page.setViewportSize({ width: 480, height: 900 });
 await page.waitForTimeout(200);
-ok('tools in content (mobile)', await page.$eval('#gslot-mobile #tools', () => true).catch(() => false));
+ok('tools in content (Narrow View)', await page.$eval('#gslot-narrow #tools', () => true).catch(() => false));
 
 // 13. Queue view still works (open first shelf).
 await page.setViewportSize({ width: 1400, height: 900 });

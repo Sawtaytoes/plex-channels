@@ -170,7 +170,7 @@
 
 /* The one non-token custom property left: the poster tile's width. It is a layout
    constant with no token analogue (the spacing scale is a 4px ramp, not a card
-   size) and the mobile breakpoint shrinks it, which is exactly what a custom
+   size) and the Narrow View breakpoint shrinks it, which is exactly what a custom
    property is for. */
 :root {
   --tile: 158px;
@@ -229,7 +229,7 @@ header .bar {
   gap: 14px;
   margin-left: auto;
 }
-#gslot-desktop:empty {
+#gslot-wide:empty {
   display: none;
 }
 header h1 {
@@ -295,7 +295,7 @@ header .sub {
     min-height: 44px;
     font-size: 1.25rem;
   }
-  /* Everything the popovers absorb comes off the bar on mobile. */
+  /* Everything the popovers absorb comes off the bar in the Narrow View. */
   header #back,
   header .namepen,
   .chrome {
@@ -783,7 +783,7 @@ ul.grid .empty {
 .add input {
   flex: 1;
   /* `min(220px, 100%)`, not a flat 220px. The same `.add` block is reused inside the
-     266px `#chfilters` Blocked box and inside the queue view at a 320px phone width,
+     266px `#chfilters` Blocked box and inside the queue view at a 320px width,
      where a hard 220px floor plus 26px of padding is wider than the space there is —
      and a `min-width` floor is precisely the thing that turns "a bit tight" into a
      scrollbar. It still wants 220px wherever 220px exists. */
@@ -1426,7 +1426,7 @@ body.queue-view #tools {
    whole DOCUMENT. Unwrapped, its min-content is the 200px search plus the ~224px
    "Add to <picker>" label, so at a 390px viewport it measured 471px and
    `documentElement.scrollWidth` went to 485. That is not merely a sideways scroll:
-   Chrome then widens the mobile LAYOUT viewport to the content, every `position: fixed`
+   Chrome then widens the LAYOUT viewport to the content, every `position: fixed`
    overlay centres itself on 485 instead of 390, and all four modals render ~50px off
    the right edge of the screen (reported 2026-08-16, images 5–7). The search takes the
    first line and the picker drops below it instead. */
@@ -1592,7 +1592,7 @@ body.queue-view #tools {
 /* `minmax(0, 1fr)`, not `1fr`. A bare `1fr` is `minmax(auto, 1fr)`, and that `auto`
    minimum is the track's widest item's MIN-CONTENT — which a grid honours even when it
    overflows the container. The members box's search input was enough to hold the track
-   at 335px inside a 277px `#chbody` at a 320px phone, and the whole channels view
+   at 335px inside a 277px `#chbody` at a 320px width, and the whole channels view
    scrolled sideways. `0` lets the track be as small as the container is. */
 #chbody {
   display: grid;
@@ -1683,7 +1683,7 @@ body.queue-view #tools {
    the fold. Now the aside is a flex column capped at the viewport height, its fieldsets live
    in an inner scroller, and `#ch-save` is a pinned footer that is ALWAYS on screen.
    `min-height: 0` on the scroller is load-bearing — without it a flex child refuses to shrink
-   and the scroller never engages. `100dvh` (not `vh`) so mobile browser chrome doesn't hide
+   and the scroller never engages. `100dvh` (not `vh`) so a browser's own chrome doesn't hide
    the button. `top`/`max-height` use F4's measured --header-h (96px fallback). */
 #chfilters {
   background: var(--color-surface-raised);
@@ -1699,7 +1699,7 @@ body.queue-view #tools {
   /* The aside sits in `#chbody`, which is itself below `.chhead` + the sub line, so its
      flow-top is ~header + ~130px. Subtract that whole run (not just the header) so `#ch-save`
      clears the fold even UNSCROLLED; once the user scrolls, `position: sticky` pins the aside
-     at `top` above and it has even more room. `100dvh` keeps mobile browser chrome from
+     at `top` above and it has even more room. `100dvh` keeps a browser's own chrome from
      eating the footer. */
   max-height: calc(100dvh - var(--header-h, 96px) - 140px);
 }
@@ -2010,7 +2010,7 @@ body.queue-view #tools {
 }
 /* The segmented provider picker. Same 10px gutter as .fieldselect so the two controls line
    up when a modal shows one of each. It only renders at two providers — at three the row
-   overflows a phone (measured: 371px into 315px), and ProviderBlock swaps to the listbox. */
+   overflows the Narrow View (measured: 371px into 315px), and ProviderBlock swaps to the listbox. */
 #setmodal .fieldseg {
   margin-left: 10px;
 }
@@ -2171,9 +2171,9 @@ html.modal-open {
 }
 
 /* PLAY landing: plain rows, no posters — the "pick and play" surface. On a wide viewport
-   the groups (Filtered Pools / Curated Pools / Ordered Queues) sit side by side as columns;
-   one column on
-   mobile. The id rule must beat the [hidden] attribute (like #selbar). */
+   the groups (Filtered Pools / Curated Pools / Ordered Queues) sit side by side as
+   columns; one column in the Narrow View. The id rule must beat the [hidden] attribute
+   (like #selbar). */
 #play:not([hidden]) {
   display: grid;
   grid-template-columns: repeat(
@@ -2236,7 +2236,7 @@ html.modal-open {
      `anywhere` also shrinks the MIN-CONTENT size, which is what a flex/grid item's
      automatic minimum is resolved against, so only `anywhere` stops the item forcing the
      track wider. The play landing wraps rather than ellipsises (`.rowmeta` is
-     `white-space: normal` on mobile), so wrapping is the right shape here. */
+     `white-space: normal` in the Narrow View), so wrapping is the right shape here. */
   overflow-wrap: anywhere;
 }
 .playrow .rowname {
@@ -2505,7 +2505,7 @@ header h1 input {
     font-size: 1.2rem;
     text-align: center;
   }
-  /* The info line now costs one truncated row, so it stays on mobile — the now-playing
+  /* The info line now costs one truncated row, so it stays in the Narrow View — the now-playing
      state and status toasts are worth the line. Un-stick the Play header still. */
   body.play-view header {
     position: static;
@@ -2535,7 +2535,7 @@ header h1 input {
     flex-wrap: wrap;
     justify-content: center;
   }
-  #gslot-mobile #tools {
+  #gslot-narrow #tools {
     margin: 0 0 16px;
   }
   #setmodal .libs,
@@ -2545,7 +2545,7 @@ header h1 input {
   #play:not([hidden]) {
     grid-template-columns: 1fr;
     gap: 18px;
-  } /* one column on mobile */
+  } /* one column in the Narrow View */
   .playrow {
     flex-wrap: wrap;
   }
@@ -2568,7 +2568,7 @@ header h1 input {
 
   /* ---- the queue view's add bar (`.add`) ----
 
-     Six label+control pairs in one wrapping flex row. At phone width every pair takes
+     Six label+control pairs in one wrapping flex row. In the Narrow View every pair takes
      its own line anyway, but each sized to its own content, so the controls started at
      six different x positions and the whole thing read as a staircase (image 3). One
      control per row, each filling the space its label leaves, lines them up. */
@@ -2590,6 +2590,38 @@ header h1 input {
   .add > input {
     /* The search box owns its line — it is the point of this bar. */
     flex-basis: 100%;
+  }
+
+  /* ---- modal fields: label above, control filling the line ----
+
+     A modal `.field` is `display: block`, so its label text and its control are inline
+     siblings that share a line only while they both fit. In the Narrow View they mostly
+     don't, and the control wrapped to a line of its own while KEEPING `.fieldselect`'s
+     `margin-inline-start` — a gutter that only ever made sense between a label and a
+     control sitting beside it. On its own line that 10px is pure indent, and because the
+     trigger is also `max-width: 100%` it then measured 10px past the modal's content
+     edge and clipped (reported 2026-08-17: "no need for that left-padding, use the
+     limited space we have").
+
+     So stop pretending: below the breakpoint every modal control is a block that starts
+     at the field's left edge and runs its full width — which is exactly what
+     `.field input[type="text"]` already does two rules up, so the form finally reads as
+     one shape instead of two. */
+  #setmodal .field > .qppicker,
+  #dynmodal .field > .qppicker,
+  #entrymodal .field > .qppicker,
+  #setmodal .field > .fieldseg,
+  #dynmodal .field > .fieldseg {
+    display: flex;
+    width: 100%;
+    max-width: none;
+    margin-inline-start: 0;
+    margin-top: 5px;
+  }
+  /* The flags rows are their own flex containers rather than blocks, so their controls
+     need the same de-indent — `.fieldselect` reaches them too. */
+  #setmodal .flags > .field > .qppicker {
+    margin-inline-start: 0;
   }
 }
 
@@ -2702,7 +2734,7 @@ header h1 input {
 /* ---- Density: CARDS. Poster left, everything else right, several per row. ---- */
 ul.grid.cards {
   /* `min(340px, 100%)`, not a flat 340px. `auto-fill` never drops below the track's OWN
-     minimum, so on a 320px phone (292px of content box) a hard 340px floor made every
+     minimum, so at a 320px width (292px of content box) a hard 340px floor made every
      card 48px wider than the page and the whole queue view scrolled sideways. The
      `min()` lets the last column collapse to the container on a screen narrower than one
      card, which is the only sane reading of "at least 340px" there. */

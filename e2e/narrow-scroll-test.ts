@@ -1,6 +1,6 @@
-// The narrow view must not scroll sideways. Ever.
+// The Narrow View must not scroll sideways. Ever.
 //
-// Reported 2026-08-10: at phone width the whole page scrolled ~210px to the right into
+// Reported 2026-08-10: in the Narrow View the whole page scrolled ~210px to the right into
 // dead space — the title cut off mid-word, every card's text gone off the left edge, and
 // the painted background ending partway across with black beyond it. Two independent
 // causes, both in this app's own `web/src/styles/app.css` (neither in `@charcuterie/ui`):
@@ -18,7 +18,7 @@
 // Reported again 2026-08-16, and the reason this suite did not catch it: it only ever
 // visited `#/`. The landing route was clean while `#/queues` measured 485px in a 390px
 // viewport, because `.gsearch-wrap` was an unwrapped flex row. The consequence was not a
-// sideways scroll anyone would describe as one — Chrome widens the mobile LAYOUT viewport
+// sideways scroll anyone would describe as one — Chrome widens the LAYOUT viewport
 // to the overflowing content, so every `position: fixed` overlay then centres itself on
 // 485 instead of 390, and all four modals rendered ~50px off the right edge of the
 // screen. The modals were innocent; the page under them was not.
@@ -40,7 +40,7 @@ import { chromium, type Page } from './playwright.js';
 const PORT = process.env.WEB_PORT || 18768;
 const ok = (name: string, isPass: boolean) => { console.log(`${isPass ? 'PASS' : 'FAIL'} ${name}`); if (!isPass) process.exitCode = 1; };
 
-// 390px is the reported width (iPhone 14/15 CSS width); 320px is the narrowest phone
+// 390px is the reported width (iPhone 14/15 CSS width); 320px is the narrowest screen
 // still in the wild and the one a fixed `min-width` breaks first.
 const WIDTHS = [390, 320];
 
@@ -241,12 +241,12 @@ for (const width of WIDTHS) {
   await page.close();
 }
 
-// 7. The same routes under REAL phone emulation, which is a different test and not a
+// 7. The same routes under REAL device emulation, which is a different test and not a
 //    redundant one.
 //
 //    Everything above runs a desktop-shaped Chromium at a narrow viewport, where
-//    `innerWidth` is fixed and overflow simply scrolls. A phone does something else: when
-//    content overflows, Chrome widens the LAYOUT viewport to fit it. That is why the
+//    `innerWidth` is fixed and overflow simply scrolls. An emulated device does something
+//    else: when content overflows, Chrome widens the LAYOUT viewport to fit it. That is why the
 //    2026-08-16 report was about modals rather than about scrolling — `scrollWidth` and
 //    `clientWidth` both read 485 and agreed with each other, so the checks above would
 //    have called it clean, while every `position: fixed` overlay centred on 485 in a
@@ -258,6 +258,9 @@ for (const width of WIDTHS) {
 for (const width of WIDTHS) {
   const page = await browser.newPage({
     deviceScaleFactor: 2,
+    // Playwright's own option names, which are NOT renamed — they are third-party API
+    // surface. What they are FOR here is the Narrow View: only under `isMobile` does
+    // Chromium honour `<meta name="viewport">` and widen the layout viewport.
     hasTouch: true,
     isMobile: true,
     viewport: { width, height: 844 },
@@ -277,7 +280,7 @@ for (const width of WIDTHS) {
     // against the real regression before picking this one.
     const layout = await page.evaluate(() => window.innerWidth);
     ok(
-      `${width}px (phone) ${hash}: the layout viewport is ${layout}, and the screen is ${width}`,
+      `${width}px (emulated) ${hash}: the layout viewport is ${layout}, and the screen is ${width}`,
       layout === width,
     );
     if (layout !== width) console.log('   overflowing:', (await offenders(page)).join(', '));
@@ -291,10 +294,10 @@ for (const width of WIDTHS) {
   await page.waitForTimeout(400);
 
   const box = await modalBox(page, 'setmodal');
-  ok(`${width}px (phone): New queue — the box is on screen`, Boolean(box));
+  ok(`${width}px (emulated): New queue — the box is on screen`, Boolean(box));
   if (box) {
     ok(
-      `${width}px (phone): New queue — inside the screen (${box.left}→${box.right} within 0→${width})`,
+      `${width}px (emulated): New queue — inside the screen (${box.left}→${box.right} within 0→${width})`,
       box.left >= 0 && box.right <= width,
     );
   }
