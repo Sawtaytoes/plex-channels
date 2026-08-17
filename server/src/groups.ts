@@ -37,7 +37,8 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { parse, stringify } from 'yaml';
+import { isSeq, parse, parseDocument, stringify } from 'yaml';
+import type { Document, YAMLSeq } from 'yaml';
 
 import type { SetRegistryEntry } from './types.js';
 
@@ -321,3 +322,177 @@ export async function seedIfMissing(sets: SetRegistryEntry[]): Promise<boolean> 
 }
 
 export const GROUPS_FILE = GROUPS_PATH;
+
+// --- writing ------------------------------------------------------------------ //
+//
+// The editor writes through the DOCUMENT api, not `stringify(readYaml())`, for the same
+// reason `sets.ts` does: this file is hand-edited over SMB as often as it is saved from the
+// app, and a round-trip that drops the header comment (or the `# ── People ──` dividers
+// someone wrote) silently punishes the person who wrote them. Every mutation below edits
+// nodes in place and leaves everything it did not touch — comments, blank lines, key order —
+// exactly as it found it.
+
+/** Turn a label into a URL-safe id. Ids are IMMUTABLE once created, so this runs on create
+ * only — a rename never touches it, which is the contract every bookmark depends on. */
+export function slugify(label: string): string {
+  return String(label)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);
+}
+
+async function readDoc(): Promise<Document> {
+  let text = '';
+  try {
+    text = await fsp.readFile(GROUPS_PATH, 'utf8');
+  } catch (e) {
+    if (!isNodeError(e) || e.code !== 'ENOENT') throw e;
+    text = `${SEED_HEADER}\ngroups: []\n`;
+  }
+  const doc = parseDocument(text);
+  if (!isSeq(doc.get('groups'))) doc.set('groups', doc.createNode([]));
+  return doc;
+}
+
+function groupsSeq(doc: Document): YAMLSeq {
+  const seq = doc.get('groups');
+  if (!isSeq(seq)) throw new Error('groups.yaml has no groups list');
+  return seq;
+}
+
+async function writeDoc(doc: Document): Promise<void> {
+  // `indentSeq: false` + `lineWidth: 0` match sets.yaml's shape, so the two config files in
+  // the same directory do not disagree about how a list looks.
+  const text = doc.toString({ indentSeq: false, lineWidth: 0 });
+  const tmp = `${GROUPS_PATH}.tmp`;
+  await fsp.mkdir(path.dirname(GROUPS_PATH), { recursive: true });
+  await fsp.writeFile(tmp, text, 'utf8');
+  try {
+    await fsp.rename(tmp, GROUPS_PATH);
+  } catch {
+    // Same fallback sets.ts keeps: a rename across a bind-mount boundary can fail where a
+    // plain write succeeds. Losing atomicity beats losing the save.
+    await fsp.writeFile(GROUPS_PATH, text, 'utf8');
+    await fsp.rm(tmp, { force: true }).catch(() => {});
+  }
+}
+
+/** Locate one group's mapping node by id. */
+function nodeFor(doc: Document, id: string): { seq: YAMLSeq; index: number } {
+  const seq = groupsSeq(doc);
+  const index = seq.items.findIndex((item) => {
+    const node = item as { get?: (k: string) => unknown } | null;
+    return Boolean(node?.get) && String(node?.get?.('id') ?? '') === id;
+  });
+  if (index < 0) throw new Error(`no such group '${id}'`);
+  return { seq, index };
+}
+
+/** The write projection of `accounts:` — empty kinds dropped rather than written as `[]`. */
+function writableAccounts(accounts: ProfileAccounts): ProfileAccounts | null {
+  const out: ProfileAccounts = {};
+  for (const [kind, names] of Object.entries(accounts || {})) {
+    const list = (names || []).map((n) => String(n).trim()).filter(Boolean);
+    if (list.length) out[kind] = list;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+export interface GroupWrite {
+  label?: string;
+  accounts?: ProfileAccounts;
+  sets?: string[];
+}
+
+/** Create a group. Returns its generated (immutable) id. */
+export async function createGroup(body: GroupWrite): Promise<{ ok: true; id: string }> {
+  const label = String(body.label ?? '').trim();
+  if (!label) throw new Error('a group needs a label');
+
+  const base = slugify(label);
+  if (!base) throw new Error(`'${label}' has no letters or digits to make an id from`);
+  if (base === ALL_ID) throw new Error(`'${ALL_ID}' is reserved for the built-in everything view`);
+
+  const doc = await readDoc();
+  const taken = new Set(storedGroups().map((g) => g.id));
+  // Two groups may legitimately want the same label ("Movies" twice is the user's business),
+  // so the ID de-duplicates rather than the save failing. `-2`, not a random suffix: it is
+  // going in a URL a person reads.
+  let id = base;
+  for (let n = 2; taken.has(id); n += 1) id = `${base}-${n}`;
+
+  const entry: Record<string, unknown> = { id, label };
+  const accounts = writableAccounts(body.accounts ?? {});
+  if (accounts) entry.accounts = accounts;
+  const sets = (body.sets ?? []).map((s) => String(s).trim()).filter(Boolean);
+  if (sets.length) entry.sets = sets;
+
+  groupsSeq(doc).add(doc.createNode(entry));
+  await writeDoc(doc);
+  return { ok: true, id };
+}
+
+/**
+ * Edit one group. `id` is never writable — see `slugify`'s note. A field absent from the
+ * body is LEFT ALONE rather than cleared, so the editor can PATCH one thing at a time; an
+ * explicitly empty `sets: []` or `accounts: {}` does clear.
+ */
+export async function updateGroup(id: string, body: GroupWrite): Promise<{ ok: true; id: string }> {
+  const doc = await readDoc();
+  const { seq, index } = nodeFor(doc, id);
+  const node = seq.get(index) as { set: (k: string, v: unknown) => void; delete: (k: string) => void };
+
+  if (body.label != null) {
+    const label = String(body.label).trim();
+    if (!label) throw new Error('a group needs a label');
+    node.set('label', label);
+  }
+  if (body.accounts != null) {
+    const accounts = writableAccounts(body.accounts);
+    if (accounts) node.set('accounts', doc.createNode(accounts));
+    else node.delete('accounts');
+  }
+  if (body.sets != null) {
+    const sets = body.sets.map((s) => String(s).trim()).filter(Boolean);
+    if (sets.length) node.set('sets', doc.createNode(sets));
+    else node.delete('sets');
+  }
+
+  await writeDoc(doc);
+  return { ok: true, id };
+}
+
+export async function deleteGroup(id: string): Promise<{ ok: true; deleted: boolean }> {
+  const doc = await readDoc();
+  let found = false;
+  try {
+    const { seq, index } = nodeFor(doc, id);
+    seq.delete(index);
+    found = true;
+  } catch {
+    return { ok: true, deleted: false }; // deleting something already gone is not an error
+  }
+  if (found) await writeDoc(doc);
+  return { ok: true, deleted: found };
+}
+
+/**
+ * Reorder the whole list. The body is the new full order; anything it omits keeps its
+ * relative position at the END rather than being dropped — a reorder must never be able to
+ * delete a group, and a stale client that has not seen a newly-added one would otherwise do
+ * exactly that.
+ */
+export async function reorderGroups(ids: string[]): Promise<{ ok: true; order: string[] }> {
+  const doc = await readDoc();
+  const seq = groupsSeq(doc);
+  const idOf = (item: unknown) => String((item as { get?: (k: string) => unknown })?.get?.('id') ?? '');
+  const wanted = ids.map(String);
+  const rank = new Map(wanted.map((id, i) => [id, i]));
+  const items = [...seq.items];
+  items.sort((a, b) => (rank.get(idOf(a)) ?? Number.MAX_SAFE_INTEGER) - (rank.get(idOf(b)) ?? Number.MAX_SAFE_INTEGER));
+  seq.items = items;
+  await writeDoc(doc);
+  return { ok: true, order: items.map(idOf) };
+}

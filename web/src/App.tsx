@@ -62,6 +62,10 @@ const DynModal = lazy(async () => ({
 const SetModal = lazy(async () => ({
   default: (await import("./components/SetModal")).SetModal,
 }))
+const GroupsModal = lazy(async () => ({
+  default: (await import("./components/GroupsModal"))
+    .GroupsModal,
+}))
 const StartModal = lazy(async () => ({
   default: (await import("./components/StartModal"))
     .StartModal,
@@ -266,6 +270,7 @@ export function App() {
       <Suspense fallback={null}>
         {overlays.setModal ? <SetModal /> : null}
         {overlays.dynModal ? <DynModal /> : null}
+        {overlays.groupsModal ? <GroupsModal /> : null}
         {overlays.startModal ? <StartModal /> : null}
         {overlays.tileMenu ? <TileMenu /> : null}
       </Suspense>
@@ -312,8 +317,8 @@ function computeChrome(
       heading: "Pools",
       isSubHidden: false,
       sub: isMovies
-        ? "The Movies pool: a weighted rewatch of films this tier has seen — least-watched most likely."
-        : "A filtered pool (not an ordered queue): pick a tier, and these filters shape the pool.",
+        ? "The Movies pool: a weighted rewatch of films this account has seen — least-watched most likely."
+        : "A filtered pool, not an ordered queue: these filters shape what it can draw from.",
     }
   }
 

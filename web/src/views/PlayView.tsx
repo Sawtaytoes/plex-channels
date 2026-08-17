@@ -6,6 +6,7 @@ import {
   OpenQueueButton,
 } from "../components/OpenQueueButton"
 import { SelectListbox } from "../components/SelectListbox"
+import { labelInGroup } from "../lib/setLabel"
 import type { Group, RegistrySet } from "../lib/types"
 import { PLEX_WORDS } from "../lib/vocab"
 import {
@@ -133,7 +134,14 @@ function PlayRow({
  * (a hand-edit, an older `sets.yaml`) keeps choosing at play time rather than silently playing
  * as whichever binding happens to be first.
  */
-function ChannelRow({ channel }: { channel: RegistrySet }) {
+function ChannelRow({
+  channel,
+  groupLabel,
+}: {
+  channel: RegistrySet
+  /** The group being viewed, so the row can drop that name from its own. */
+  groupLabel: string | null
+}) {
   const isRewatch = channel.behavior === "rewatch"
   const options = channel.has_explicit_profiles
     ? (channel.profiles || []).map((b) => ({
@@ -188,7 +196,7 @@ function ChannelRow({ channel }: { channel: RegistrySet }) {
 
   return (
     <PlayRow
-      label={channel.label}
+      label={labelInGroup(channel.label, groupLabel)}
       set={channel}
       // Whose pool this is comes FIRST — "Shows" and "Shows & Shorts" are the same words
       // until you know one is Younger Kids and the other Older Kids, and that used to be
@@ -275,6 +283,9 @@ export function PlayView({
     kind
 
   const basePath = active ? groupPath(active) : "/"
+  // Inside a group, a row drops that group's own name — the heading already says it, and
+  // repeating it buries the one word that tells two rows apart. See `lib/setLabel.ts`.
+  const groupLabel = active?.label ?? null
 
   const pools = rotationChannels(reg).filter((s) =>
     isShown(s.id),
@@ -334,7 +345,11 @@ export function PlayView({
           {isHidden
             ? null
             : pools.map((s) => (
-                <ChannelRow channel={s} key={s.id} />
+                <ChannelRow
+                  channel={s}
+                  groupLabel={groupLabel}
+                  key={s.id}
+                />
               ))}
         </ul>
       </section>
@@ -362,7 +377,10 @@ export function PlayView({
                 return (
                   <PlayRow
                     key={id}
-                    label={s.label}
+                    label={labelInGroup(
+                      s.label,
+                      groupLabel,
+                    )}
                     set={reg?.sets.find((x) => x.id === id)}
                     meta={`${s.items.length} shows · rotation`}
                     to={`/q/${id}`}
@@ -398,7 +416,10 @@ export function PlayView({
                 return (
                   <PlayRow
                     key={id}
-                    label={s.label}
+                    label={labelInGroup(
+                      s.label,
+                      groupLabel,
+                    )}
                     // The registry entry, same as the Curated rows above. Without it a
                     // Plex QUEUE renders in the neutral accent while a Plex CHANNEL two
                     // columns over renders amber — one page, two colours, same provider.

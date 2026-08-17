@@ -602,6 +602,12 @@ export type Group = {
   label: string
   /** Provider kind -> account names. Empty when membership is by hand. */
   accounts: Record<string, string[]>
+  /**
+   * The set ids this group NAMES — the stored `sets:` list, not the resolved membership.
+   * The editor needs both: a tick in `sets` is yours to remove, a set that is only in
+   * `setIds` got there by matching an account and cannot be unticked.
+   */
+  sets: string[]
   /** Set ids, in registry order — the landing filtered, never re-sorted. */
   setIds: string[]
   /** Provider kinds present in `setIds`, so the UI offers only the chips that apply. */

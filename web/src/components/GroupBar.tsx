@@ -2,6 +2,7 @@ import { Link } from "react-router"
 
 import type { Group } from "../lib/types"
 import { groupPath, onlyPath } from "../state/group"
+import { openGroupsModal } from "../state/overlays"
 
 /**
  * WHO IS WATCHING — the row of groups at the top of the landing, and the provider filter
@@ -75,6 +76,18 @@ export function GroupBar({
             </li>
           )
         })}
+        <li>
+          {/* The editor opens on the group you are LOOKING AT, so "these chips are wrong"
+              and "fix this chip" are one gesture rather than two. */}
+          <button
+            className="groupchip groupedit"
+            id="groupsedit"
+            onClick={() => openGroupsModal(activeId)}
+            type="button"
+          >
+            ⚙ Edit groups
+          </button>
+        </li>
       </ul>
 
       {providerKinds.length > 1 ? (

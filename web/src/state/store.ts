@@ -165,6 +165,28 @@ export async function refreshHistoryButtons() {
   }
 }
 
+/**
+ * Re-read the GROUPS only.
+ *
+ * Separate from `load()` on purpose: `load()` re-resolves every queue against Plex and
+ * Kavita and takes 7-9 s, while this is a YAML read plus a join and answers in ~10 ms. The
+ * groups editor saves through this, because a save that takes eight seconds to reflect is a
+ * save the user assumes failed — and worse, the editor re-seeds its form when the refreshed
+ * store arrives, so a slow one lands ON TOP of whatever was typed next.
+ */
+export async function refreshGroups(): Promise<void> {
+  try {
+    setState({
+      groups: await api<GroupsResponse>(
+        "GET",
+        "/api/groups",
+      ),
+    })
+  } catch {
+    /* the SSE `data` event retries — groups.yaml is watched */
+  }
+}
+
 /** Re-fetch both files. Used by `load()` and by every mutation that needs a resync. */
 export async function fetchAll(): Promise<
   [QueuesResponse, SetsResponse]
