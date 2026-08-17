@@ -613,10 +613,12 @@ function batchStop(
 // keeps a 'member' stop a correct no-op there. Movies in a collection each carry their OWN
 // member_key, because their `show` is the collection name and would fuse them into one segment.
 function segmentKey(item: ResolvedItem, stop: string): string {
-  // NOTE the separator in the 'season' branch is a literal NUL (U+0000), not a space — a show
-  // title may contain spaces, and this keeps two segments from colliding. Left byte-for-byte.
+  // The separator is a NUL (U+0000), not a space: a show title may contain spaces, and this
+  // keeps two segments from colliding. Written as the ESCAPE `\0` rather than a raw NUL
+  // byte in the source — the string is byte-identical, but a literal NUL made grep and rg
+  // classify this whole file as BINARY and silently return nothing for every search of it.
   const member = item.member_key || item.show;
-  return stop === 'season' ? `${member} ${item.season}` : String(member);
+  return stop === 'season' ? `${member}\0${item.season}` : String(member);
 }
 
 /**
