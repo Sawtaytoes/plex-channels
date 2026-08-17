@@ -69,7 +69,7 @@ He picked the **plate**, and asked for it in `materialize()` rather than as a on
 
 ## Consequences
 
-- **The server bundle grows ~955 KB** (2642 → 3598 KB): Satori and its asm-yoga, plus ~110 KB
+- **The server bundle grows ~956 KB** (2673 → 3628 KB): Satori and its asm-yoga, plus ~110 KB
   of inlined font. That is the price of correct typography with no native dependency, on a
   container image, paid once.
 - Every Kavita queue gets artwork on its first launch after deploy, including ones that do not
