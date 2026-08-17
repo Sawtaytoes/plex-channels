@@ -214,8 +214,15 @@ for (const width of WIDTHS) {
   for (const [hash, trigger, boxId, label] of modals) {
     await page.goto(`http://localhost:${PORT}${hash}`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(700);
-    const isTriggerThere = await page.$(trigger);
-    ok(`${width}px: ${label} — its trigger (${trigger}) exists`, Boolean(isTriggerThere));
+    // `waitForSelector`, not a bare `$` after a fixed sleep. The channels view renders its
+    // action buttons once the registry lands, and on a cold CI runner that took longer than
+    // the 700ms wait above — `#newcurated` was reported missing at 320px while passing at
+    // 390px in the SAME run, which is the signature of a race and not of a real absence.
+    const isTriggerThere = await page
+      .waitForSelector(trigger, { timeout: 20000 })
+      .then(() => true)
+      .catch(() => false);
+    ok(`${width}px: ${label} — its trigger (${trigger}) exists`, isTriggerThere);
     if (!isTriggerThere) continue;
 
     await page.click(trigger);
