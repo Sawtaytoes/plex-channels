@@ -79,7 +79,11 @@ const providerStub = {
 // about WHETHER it was called at all and WITH WHAT — this provider was unreachable before
 // 2026-08-17.
 const listCalls: { window: number; at: number; built: unknown[] }[] = [];
-let bucketsCtx: Record<string, unknown> | null = null;
+// A HOLDER rather than a bare `let`: TypeScript's control-flow analysis does not know the
+// stub below ever runs, so a `let … = null` stays narrowed to `null` at every read site and
+// `ctx?.entries` types as `never`. Property narrowing is invalidated by the intervening
+// `await topup(…)`, which is exactly the honest answer here.
+const seen: { ctx: Record<string, unknown> | null } = { ctx: null };
 const readingStub = {
   label: 'FakeKavita',
   delivery: 'pull',
@@ -87,7 +91,7 @@ const readingStub = {
   // uses it rather than the old Plex-shaped `buckets({ setName, cfg, binding, token })` call,
   // which omitted `entries` and served the library shelf instead of the owner's own series.
   buckets: async (ctx: Record<string, unknown>) => {
-    bucketsCtx = ctx;
+    seen.ctx = ctx;
     return { play: [{ chapterId: 7, seriesId: 1, title: 'ch 7' }] };
   },
   topupList: async ({ window, at, build }: {
@@ -190,8 +194,8 @@ check('  and asked at the same threshold as a playQueue', listCalls[0]?.at, 3);
 check('  the provider both added and trimmed', [reading.added, reading.remaining], [1, 1]);
 // The lineup came from the SHARED builder: `entries` is the key the old call omitted, and
 // `batch` carries the set's own `episodes: 2`.
-check('  the lineup was built entries-first, not shelf-first', Array.isArray(bucketsCtx?.entries), true);
-check('  with the set\'s own per-series batch', bucketsCtx?.batch, 2);
+check('  the lineup was built entries-first, not shelf-first', Array.isArray(seen.ctx?.entries), true);
+check('  with the set\'s own per-series batch', seen.ctx?.batch, 2);
 
 // The sweep is what the MQTT tick actually calls: no set name, no session, find them.
 resetSession(null);
