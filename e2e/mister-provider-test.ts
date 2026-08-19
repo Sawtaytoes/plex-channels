@@ -81,6 +81,9 @@ function stubClient() {
 
 const { misterProvider, titleFromPath, systemFromPath } = await import('../server/src/providers/mister.js');
 const { boxartUrls, LIBRETRO_SYSTEM } = await import('../server/src/providers/mister-boxart.js');
+const {
+  boxartCacheDir, isCachedMiss, readCachedArt, writeCachedArt,
+} = await import('../server/src/providers/mister-boxart-cache.js');
 const { publicView, definitionFor, isConfigured } = await import('../server/src/providers/config.js');
 
 const provider = () => misterProvider({ def: DEF, client: asClient(stubClient()) });
@@ -206,6 +209,46 @@ await ok('every mapped folder is a real libretro system name shape', async () =>
   for (const [system, folder] of Object.entries(LIBRETRO_SYSTEM)) {
     assert.ok(folder && folder.includes(' - '), `${system} -> ${folder} is not a maker-system name`);
   }
+});
+
+// --- the art cache ----------------------------------------------------------------- //
+//
+// This is the first provider whose art comes from the public internet rather than the LAN,
+// at ~300 KB a tile. Measured before these gates were written: a hit goes 1 network request
+// -> 0, and a MISS goes 3 -> 0. The miss is the half that matters, because a game with no
+// art costs three requests (boxart, title, snap) on every single render and will never grow
+// any.
+
+await ok('a cached hit is byte-identical and needs no network', async () => {
+  const art = Buffer.from('not really a png, but bytes are bytes');
+  await writeCachedArt('SNES', 'Cached Game (USA)', art);
+  const back = await readCachedArt('SNES', 'Cached Game (USA)');
+  assert.ok(back, 'nothing came back out of the cache');
+  assert.ok(back.equals(art), 'the cached bytes changed in transit');
+});
+
+await ok('a miss is remembered, so it costs three requests once rather than every render', async () => {
+  assert.equal(await isCachedMiss('SNES', 'No Art At All (USA)'), false);
+  await writeCachedArt('SNES', 'No Art At All (USA)', null);
+  assert.equal(await isCachedMiss('SNES', 'No Art At All (USA)'), true);
+  // A miss must not masquerade as a hit — the reader has to answer null, not an empty buffer.
+  assert.equal(await readCachedArt('SNES', 'No Art At All (USA)'), null);
+});
+
+await ok('two games never collide, however awkward their names', async () => {
+  // A No-Intro name carries `:` and `/`-hostile characters and runs long, which is why the
+  // key is hashed rather than sanitized: every sanitizer eventually maps two titles to one.
+  const a = Buffer.from('A');
+  const b = Buffer.from('B');
+  await writeCachedArt('SNES', 'Sonic 3: Knuckles & Co. (World) (Rev A)', a);
+  await writeCachedArt('Genesis', 'Sonic 3: Knuckles & Co. (World) (Rev A)', b);
+  assert.ok((await readCachedArt('SNES', 'Sonic 3: Knuckles & Co. (World) (Rev A)'))?.equals(a));
+  assert.ok((await readCachedArt('Genesis', 'Sonic 3: Knuckles & Co. (World) (Rev A)'))?.equals(b));
+});
+
+await ok('the cache sits beside the sqlite cache, not somewhere surprising', async () => {
+  assert.ok(boxartCacheDir().endsWith('/boxart'), boxartCacheDir());
+  assert.ok(boxartCacheDir().startsWith(SCRATCH), `${boxartCacheDir()} is outside ${SCRATCH}`);
 });
 
 // --- lineup + handoff -------------------------------------------------------------- //

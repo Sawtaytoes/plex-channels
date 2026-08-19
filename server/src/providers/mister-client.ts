@@ -20,6 +20,7 @@
 // HA's `script.control_games`; this app answers WHAT to launch.
 import type { ProviderCover, ProviderSearchHit } from '../types.js';
 import { boxartUrls } from './mister-boxart.js';
+import { isCachedMiss, readCachedArt, writeCachedArt } from './mister-boxart-cache.js';
 
 /** How long the systems list is reused. It changes when cores are installed, i.e. rarely. */
 const SYSTEMS_TTL_MS = 300_000;
@@ -138,17 +139,28 @@ export function misterClient({ baseUrl, fetchImpl = null }: MisterClientOptions 
       const candidates = boxartUrls(system, title);
       if (!candidates.length) throw new Error(`mister: no thumbnail source for system '${system}'`);
 
+      // The cache is checked before the network on BOTH answers — see mister-boxart-cache.ts
+      // for why remembering a miss matters more than remembering a hit.
+      const cached = await readCachedArt(system, title);
+      if (cached) return { buffer: cached, contentType: 'image/png' };
+      if (await isCachedMiss(system, title)) {
+        throw new Error(`mister: no artwork for “${title}” (${system}) [cached]`);
+      }
+
       for (const url of candidates) {
         // Deliberately NOT `doFetch`: that seam exists so the offline suite can stub the
         // MiSTer, and this is a different host entirely. A test that wants to stub the
         // archive injects its own client.
         const res = await fetch(url);
         if (!res.ok) continue;
-        return {
-          buffer: Buffer.from(await res.arrayBuffer()),
-          contentType: res.headers.get('content-type') || 'image/png',
-        };
+        const buffer = Buffer.from(await res.arrayBuffer());
+        await writeCachedArt(system, title, buffer);
+        // Always image/png: all three archive folders serve .png, so this is a fact about
+        // the source rather than a guess, and it means a cache hit needs no sidecar to
+        // remember a content type by.
+        return { buffer, contentType: 'image/png' };
       }
+      await writeCachedArt(system, title, null);
       throw new Error(`mister: no artwork for “${title}” (${system})`);
     },
 
