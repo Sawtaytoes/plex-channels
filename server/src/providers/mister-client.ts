@@ -18,7 +18,8 @@
 // OSD, enable the Xbox Wireless Adapter, and switch the remote to Retro Games — and would
 // be a new REST bridge between services, which the house rules forbid. Launching stays with
 // HA's `script.control_games`; this app answers WHAT to launch.
-import type { ProviderSearchHit } from '../types.js';
+import type { ProviderCover, ProviderSearchHit } from '../types.js';
+import { boxartUrls } from './mister-boxart.js';
 
 /** How long the systems list is reused. It changes when cores are installed, i.e. rarely. */
 const SYSTEMS_TTL_MS = 300_000;
@@ -57,6 +58,14 @@ export interface MisterHttpClient {
   search(query: string, system?: string): Promise<MisterGameDto[]>;
   /** What is running RIGHT NOW, or null at the menu. The close-watcher's signal. */
   playing(): Promise<MisterPlayingDto | null>;
+  /**
+   * Box art for a game, from the libretro archive — NOT from the MiSTer.
+   *
+   * On this client rather than in the provider because it is a network fetch with a
+   * fallback chain, which is exactly what this layer is for; the provider stays the
+   * media-neutral shape. See mister-boxart.ts for why the art comes from elsewhere at all.
+   */
+  cover(system: string, title: string): Promise<ProviderCover>;
 }
 
 export interface MisterClientOptions {
@@ -113,6 +122,34 @@ export function misterClient({ baseUrl, fetchImpl = null }: MisterClientOptions 
         method: 'POST',
       }, {});
       return Array.isArray(body.data) ? body.data : [];
+    },
+
+    /**
+     * Box art, as BYTES, re-served through this origin like every other provider's.
+     *
+     * Tries box art, then the title screen, then an in-game snap. A miss on all three throws,
+     * which the cover route turns into the same blank tile a MiSTer queue had before — no art
+     * is a normal outcome here, not an error worth a stack trace.
+     *
+     * NOTE this is the one call in this client that does not go to the MiSTer at all, so it
+     * works while the MiSTer is powered down — which is most of the time.
+     */
+    async cover(system: string, title: string): Promise<ProviderCover> {
+      const candidates = boxartUrls(system, title);
+      if (!candidates.length) throw new Error(`mister: no thumbnail source for system '${system}'`);
+
+      for (const url of candidates) {
+        // Deliberately NOT `doFetch`: that seam exists so the offline suite can stub the
+        // MiSTer, and this is a different host entirely. A test that wants to stub the
+        // archive injects its own client.
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        return {
+          buffer: Buffer.from(await res.arrayBuffer()),
+          contentType: res.headers.get('content-type') || 'image/png',
+        };
+      }
+      throw new Error(`mister: no artwork for “${title}” (${system})`);
     },
 
     /**

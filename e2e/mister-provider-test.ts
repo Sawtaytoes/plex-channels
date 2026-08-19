@@ -80,6 +80,7 @@ function stubClient() {
 }
 
 const { misterProvider, titleFromPath, systemFromPath } = await import('../server/src/providers/mister.js');
+const { boxartUrls, LIBRETRO_SYSTEM } = await import('../server/src/providers/mister-boxart.js');
 const { publicView, definitionFor, isConfigured } = await import('../server/src/providers/config.js');
 
 const provider = () => misterProvider({ def: DEF, client: asClient(stubClient()) });
@@ -162,6 +163,49 @@ await ok('a title and a system are derived from the stored path', async () => {
   // A path that is nothing like the convention must not throw or invent a system.
   assert.equal(systemFromPath('nonsense'), '');
   assert.equal(titleFromPath(''), '');
+});
+
+// --- box art --------------------------------------------------------------------- //
+//
+// mrext serves no artwork, so the art comes from the libretro archive, which is keyed on
+// No-Intro names — the naming this ROM share already uses. Measured 47/48 on real games
+// before this was built; these gates pin the URL SHAPE, which is what would silently rot.
+
+await ok('a mapped system builds boxart, title and snap urls in that order', async () => {
+  const urls = boxartUrls('SNES', 'Super Mario World (USA)');
+  assert.equal(urls.length, 3);
+  assert.match(urls[0] as string, /Named_Boxarts/);
+  assert.match(urls[1] as string, /Named_Titles/);
+  assert.match(urls[2] as string, /Named_Snaps/);
+  assert.equal(
+    urls[0],
+    'https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System'
+    + '/Named_Boxarts/Super%20Mario%20World%20(USA).png',
+  );
+});
+
+await ok('an UNMAPPED system returns nothing rather than guessing', async () => {
+  // The failure this prevents: handing back a neighbouring console's art because a fuzzy
+  // match looked close enough. A grey tile is honest; the wrong box is not.
+  assert.deepEqual(boxartUrls('Galaksija', 'Anything'), []);
+  assert.deepEqual(boxartUrls('', 'Anything'), []);
+  assert.deepEqual(boxartUrls('SNES', ''), []);
+});
+
+await ok('a No-Intro name is used verbatim, ampersands and revisions included', async () => {
+  // Stripping a region or a `(Rev 1)` tail is how a title stops matching the archive.
+  const [rev] = boxartUrls('NES', 'Legend of Zelda, The (USA) (Rev 1)');
+  assert.match(rev as string, /Legend%20of%20Zelda%2C%20The%20\(USA\)%20\(Rev%201\)\.png$/);
+  const [amp] = boxartUrls('Genesis', 'Sonic & Knuckles (World)');
+  assert.match(amp as string, /Sonic%20%26%20Knuckles/);
+});
+
+await ok('every mapped folder is a real libretro system name shape', async () => {
+  // A typo here is invisible: it just 404s forever and the tile stays grey. Every value is
+  // "Maker - System", which is the archive's own convention.
+  for (const [system, folder] of Object.entries(LIBRETRO_SYSTEM)) {
+    assert.ok(folder && folder.includes(' - '), `${system} -> ${folder} is not a maker-system name`);
+  }
 });
 
 // --- lineup + handoff -------------------------------------------------------------- //
