@@ -24,11 +24,12 @@ never in the tree.
   needed, and there is not one call site left — do not add the first one, and do not write
   guidance that recommends it. This app settled it on 2026-08-07
   ([decision](docs/decisions/2026-08-07-plex-channels-pickers-are-listbox-not-native-select.md)),
-  and it is now the fleet standard as well:
-  [`Listbox` is the picker in every owned app](../agentic/docs/decisions/2026-08-20-listbox-is-the-picker-in-every-owned-app-and-native-select-is-a-hatch-we-have-never-needed.md)
-  and
-  [`Listbox` and `Combobox` are the default; `Select` is demoted](../charcuterie/docs/decisions/2026-08-10-listbox-and-combobox-are-the-default-and-select-is-demoted.md)
-  (both in sibling workspace repos, not public — cited by title so they can be found).
+  and it is now the fleet standard as well. The other two records live in **sibling
+  workspace repos, not on GitHub** — so they are named rather than linked, because a link
+  from here would 404 for anyone reading this on the public repo:
+  - `agentic:docs/decisions/2026-08-20-listbox-is-the-picker-in-every-owned-app-and-native-select-is-a-hatch-we-have-never-needed.md`
+  - `charcuterie:docs/decisions/2026-08-10-listbox-and-combobox-are-the-default-and-select-is-demoted.md`
+    (on `origin/master`)
 - Pickers go through **`SelectListbox`** (`web/src/components/SelectListbox.tsx`), a thin
   adapter over `@charcuterie/ui`'s `Picker`, so a call site is one element with
   `options`/`value`/`onChange`. Two things in it are this app's and must survive any
