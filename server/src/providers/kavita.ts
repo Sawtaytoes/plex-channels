@@ -244,10 +244,22 @@ function orderedAll(detail: KavitaSeriesDetailDto | null): UnreadEntry[] {
   });
 }
 
+/**
+ * Is this chapter unread?
+ *
+ * `pages: 0` means Kavita does not know the length — keep it rather than treat the gap as
+ * "already read". The old continue-point path had the same rule; dropping unknowns here
+ * would make a whole series vanish from the rotation for a metadata hole.
+ */
+function isChapterUnread(ch: KavitaChapterDto): boolean {
+  if (ch.id == null) return false;
+  const pages = ch.pages ?? 0;
+  if (pages <= 0) return true;
+  return (ch.pagesRead ?? 0) < pages;
+}
+
 function orderedUnread(detail: KavitaSeriesDetailDto | null): UnreadEntry[] {
-  return orderedAll(detail).filter(({ chapter: ch }) => (
-    (ch.pages ?? 0) > 0 && (ch.pagesRead ?? 0) < (ch.pages ?? 0)
-  ));
+  return orderedAll(detail).filter(({ chapter: ch }) => isChapterUnread(ch));
 }
 
 function isFullyRead(ch: KavitaChapterDto): boolean {
