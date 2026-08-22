@@ -3686,7 +3686,10 @@ body.rowdragging {
      that ellipsises the moment it is short of room. The first pass had these the other way
      round (`1fr` title, `2fr` seek) and truncated "Bob's Long-Running Cartoon — The Cave of
      Two L…" at 1420px with 300px of empty track beside it. */
-  grid-template-columns: minmax(0, 2fr) auto minmax(16rem, 1fr);
+  grid-template-columns: minmax(0, 2fr) auto minmax(
+      16rem,
+      1fr
+    );
   gap: 12px 16px;
   align-items: center;
   padding: 8px 16px;
